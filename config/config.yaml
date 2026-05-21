@@ -1,0 +1,88 @@
+# Configuración central del proyecto amazonia-deforestation.
+# Un único punto de verdad para parámetros de área, tiempo, datos y modelado.
+# Editar este archivo en lugar de incrustar valores en notebooks o scripts.
+
+project:
+  name: amazonia-deforestation
+  crs_working: "EPSG:32618"   # UTM 18N, métrico, para distancias y áreas en el AOI
+  crs_geographic: "EPSG:4326"
+
+# --- Área de interés (AOI) ---
+# Arco amazónico, Caquetá: Cartagena del Chairá y San Vicente del Caguán (~5.000 km²).
+# bbox PROVISIONAL en grados (lon_min, lat_min, lon_max, lat_max).
+# Refinar con límites municipales del IGAC en data/external antes de la ingestión definitiva.
+aoi:
+  name: caqueta_arc
+  bbox_geographic: [-74.8406, 0.66915, -74.2016, 1.30815]   # AOI ~5.023 km² sobre el núcleo activo (selección dirigida por Hansen 2024)
+  municipalities:
+    - "Cartagena del Chairá"
+    - "San Vicente del Caguán"
+  municipality_dane_codes: [18150, 18753]   # Caquetá (18): Cartagena del Chairá, San Vicente del Caguán
+  boundaries_path: null       # ruta a shapefile/geojson DANE/IGAC; si es null, se descarga de geoBoundaries
+  target_area_km2: 5000       # tamaño del AOI de trabajo, dentro de los municipios, sobre el núcleo activo
+  block_size_km: 5.0          # tamaño inicial del bloque para validación espacial
+
+# --- Alcance temporal ---
+# Año objetivo a detectar y composiciones de entrada. Cambiar aquí para re-correr otro año.
+temporal:
+  target_year: 2024           # año de la etiqueta Hansen (lossyear == 24)
+  composite_quarters:         # trimestres de Sentinel-2 usados como entrada
+    - { id: "2024Q1", start: "2024-01-01", end: "2024-03-31" }
+    - { id: "2024Q2", start: "2024-04-01", end: "2024-06-30" }
+    - { id: "2024Q3", start: "2024-07-01", end: "2024-09-30" }
+    - { id: "2024Q4", start: "2024-10-01", end: "2024-12-31" }
+  cloud_cover_max: 80         # filtro inicial de nubosidad por escena (%)
+
+# --- Fuentes de datos ---
+data_sources:
+  sentinel2:
+    stac_url: "https://earth-search.aws.element84.com/v1"
+    collection: "sentinel-2-l2a"
+    s3_bucket: "s3://sentinel-cogs"
+    region: "us-west-2"
+    bands: [B02, B03, B04, B05, B06, B07, B08, B8A, B11, B12, SCL]
+  hansen_gfc:
+    version: "v1.12"
+    layers: [treecover2000, loss, lossyear, gain]
+    base_url: "https://storage.googleapis.com/earthenginepartners-hansen/GFC-2024-v1.12"
+  context:
+    igac_admin_boundaries: true     # límites departamentales/municipales
+    runap_protected_areas: true     # Registro Único Nacional de Áreas Protegidas
+
+# --- Procesamiento ---
+processing:
+  working_resolution_m: 20        # grilla de trabajo; 10 m -> 20 m por promedio, 30 m label -> 20 m por vecino
+  output_crs: "EPSG:32618"        # UTM 18N, métrico
+  resampling: { bands_10m_to_20m: average, label_30m_to_20m: nearest }
+
+# --- Composición y características ---
+features:
+  composite_aggregations: [median, p25]
+  spectral_indices: [ndvi, nbr, ndwi]
+  contextual_windows: [3, 5]        # ventanas para media/desv. estándar y GLCM
+  glcm_metrics: [contrast, homogeneity, entropy]
+
+# --- Modelado ---
+modeling:
+  positive_class: 1                 # 1 = pérdida de cobertura (deforestación)
+  split_ratios: { train: 0.70, val: 0.15, test: 0.15 }
+  focal_loss: { alpha: 0.25, gamma: 2.0 }
+  baselines: [random_forest, xgboost]
+  unet:
+    encoder: "resnet34"
+    encoder_weights: "imagenet"
+    window_size: 256
+  mlflow_tracking_uri: "file:./mlruns"
+
+# --- Evaluación ---
+evaluation:
+  primary_metric: "f1"
+  polygon_iou_threshold: 0.3
+  bootstrap_iterations: 1000
+  success_criteria: { f1_pixel_min: 0.70, iou_polygon_min: 0.40, inference_minutes_max: 10 }
+
+# --- AWS (rellenar tras crear los recursos) ---
+aws:
+  region: "us-west-2"
+  project_bucket: "amazonia-deforestation-data-363918845645"
+  prefixes: { raw: "raw/", derived: "derived/", models: "models/", athena_results: "athena-results/" }

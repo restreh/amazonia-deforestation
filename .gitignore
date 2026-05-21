@@ -1,0 +1,55 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.python-version
+
+# --- Jupyter ---
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+
+# --- Datos (no se versionan; se reconstruyen vía pipeline) ---
+data/raw/*
+data/interim/*
+data/processed/*
+data/external/*
+!data/**/.gitkeep
+*.tif
+*.tiff
+*.parquet
+*.nc
+*.zarr/
+
+# --- Modelos y experimentos ---
+models/*.pt
+models/*.pkl
+models/*.joblib
+mlruns/
+mlartifacts/
+
+# --- Credenciales y secretos (NUNCA versionar) ---
+.env
+.env.*
+*.pem
+*.key
+aws_credentials*
+.aws/
+
+# --- Salidas y temporales ---
+*.log
+.cache/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# --- Sistema operativo / editores ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

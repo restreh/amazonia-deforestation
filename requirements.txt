@@ -1,0 +1,62 @@
+# Entorno reproducible del proyecto amazonia-deforestation.
+# Python 3.11 recomendado. Instalación: pip install -r requirements.txt
+# Para PyTorch con GPU (SageMaker Studio Lab T4) seguir la guía oficial de pytorch.org.
+
+# --- Núcleo numérico y de datos ---
+numpy>=1.26,<2.1
+pandas>=2.1
+pyyaml>=6.0
+tqdm>=4.66
+
+# --- Geoespacial: IO y vectores ---
+rasterio>=1.3
+rioxarray>=0.15
+xarray>=2024.1
+geopandas>=0.14
+shapely>=2.0
+pyproj>=3.6
+fiona>=1.9
+
+# --- STAC, cubos de datos perezosos y procesamiento distribuido ---
+pystac-client>=0.7
+stackstac>=0.5
+dask[complete]>=2024.1
+distributed>=2024.1
+
+# --- Almacenamiento columnar y acceso a AWS ---
+pyarrow>=15.0
+boto3>=1.34
+s3fs>=2024.2
+pyathena>=3.0
+
+# --- Aprendizaje automático: baselines ---
+scikit-learn>=1.4
+xgboost>=2.0
+
+# --- Aprendizaje profundo: U-Net ---
+torch>=2.2
+torchvision>=0.17
+segmentation-models-pytorch>=0.3
+
+# --- Textura y procesamiento de imágenes ---
+scikit-image>=0.22
+
+# --- Estadística espacial y geoestadística ---
+esda>=2.5
+libpysal>=4.9
+pykrige>=1.7
+
+# --- Registro de experimentos ---
+mlflow>=2.10
+
+# --- Visualización y tablero interactivo ---
+streamlit>=1.31
+leafmap>=0.30
+folium>=0.15
+plotly>=5.18
+matplotlib>=3.8
+seaborn>=0.13
+
+# --- Entorno de notebooks ---
+jupyterlab>=4.0
+ipykernel>=6.29
