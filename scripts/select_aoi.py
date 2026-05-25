@@ -1,9 +1,9 @@
-"""Selecciona el AOI de trabajo (~5.000 km²) sobre el núcleo de deforestación.
+"""Selecciona el AOI de trabajo (~5.000 km2) sobre el nucleo de deforestacion.
 
-Uso (desde la raíz del repositorio, tras correr refine_aoi.py):
+Uso (desde la raiz del repositorio, tras correr refine_aoi.py):
     python scripts/select_aoi.py
 
-Requiere internet. Dependencias mínimas:
+Requiere internet. Dependencias minimas:
     pip install rasterio geopandas numpy pyyaml
 """
 
@@ -26,7 +26,7 @@ def main() -> None:
     if not boundary_path.exists():
         print("Falta data/external/aoi_municipalities.geojson. Corre primero scripts/refine_aoi.py")
         return
-    print("Seleccionando AOI sobre el núcleo de deforestación...")
+    print("Seleccionando AOI sobre el nucleo de deforestacion...")
     select_aoi(config, boundary_path)
 
 

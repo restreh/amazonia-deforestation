@@ -35,7 +35,8 @@ abierto con un ciclo de actualización más corto.
 amazonia-deforestation/
 ├── config/        Configuración central (config.yaml)
 ├── data/          raw, interim, processed, external (no versionados)
-├── notebooks/     Flujo CRISP-DM: EDA, diagnóstico espacial, preparación, modelado
+├── scripts/       Pipeline reproducible por pasos (ingesta, features, modelado, evaluación)
+├── notebooks/     EDA y figuras para el informe (opcional)
 ├── src/amazonia_deforestation/
 │   ├── ingest/      STAC Earth-Search, lectura COG, cubos con stackstac/Dask
 │   ├── data/        Composiciones trimestrales, máscaras SCL, índices
@@ -71,15 +72,27 @@ pip install -r requirements.txt
 # 3. Credenciales AWS (lectura de datos abiertos y escritura en el bucket del proyecto)
 aws configure   # región us-west-2
 
-# 4. Ejecutar el flujo CRISP-DM desde notebooks/ en orden numérico.
+# 4. Ejecutar el pipeline por pasos (desde la raíz del repositorio):
+python scripts/refine_aoi.py            # AOI a límites municipales
+python scripts/select_aoi.py            # ventana de ~5.000 km² sobre el núcleo de deforestación
+python scripts/build_composites.py      # composiciones trimestrales Sentinel-2
+python scripts/build_indices.py         # NDVI, NBR, NDWI
+python scripts/align_label.py           # etiqueta Hansen a la grilla de 20 m
+python scripts/run_diagnostics.py       # I de Moran y semivariograma
+python scripts/build_split.py           # partición espacial por bloques
+python scripts/build_training_sample.py # muestreo balanceado de píxeles
+python scripts/build_features.py        # tabla de atributos por píxel
+python scripts/train_baselines.py       # Random Forest y XGBoost (CV espacial)
+python scripts/predict.py               # predicción por píxel sobre val/test
+python scripts/evaluate_baseline.py     # métricas de píxel y de polígono
 ```
 
 ## Infraestructura AWS
 
-Cómputo dentro del AWS Free Tier (región `us-west-2`) más SageMaker Studio Lab
-para el fine-tuning con GPU. Almacenamiento de derivados en S3 (Parquet
-particionado por tile MGRS, trimestre y bloque), consulta con Athena,
-orquestación e inferencia en Lambda. Ver `infra/`.
+Cómputo dentro del AWS Free Tier (región `us-west-2`) y fine-tuning del U-Net en
+GPU. Almacenamiento de derivados en S3 (Parquet particionado por tile MGRS,
+trimestre y bloque), consulta con Athena, orquestación e inferencia en Lambda.
+Ver `infra/`.
 
 ## Licencia
 

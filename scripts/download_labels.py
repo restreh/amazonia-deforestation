@@ -1,10 +1,10 @@
-"""Deriva la etiqueta binaria de deforestación de Hansen GFC sobre el AOI.
+"""Deriva la etiqueta binaria de deforestacion de Hansen GFC sobre el AOI.
 
-Uso (desde la raíz del repositorio):
+Uso (desde la raiz del repositorio):
     python scripts/download_labels.py
 
 Lee por ventana sin descargar el tile completo. Requiere internet.
-Dependencias mínimas:
+Dependencias minimas:
     pip install rasterio numpy pyyaml
 """
 

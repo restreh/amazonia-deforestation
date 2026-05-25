@@ -4,7 +4,9 @@ Uso (desde la raiz del repositorio):
     python scripts/build_indices.py
 
 Opera sobre los GeoTIFF en data/processed/composites y escribe en
-data/processed/indices. Dependencias minimas: rasterio, numpy.
+data/processed/indices. 
+
+Dependencias minimas: rasterio, numpy.
 """
 
 from __future__ import annotations

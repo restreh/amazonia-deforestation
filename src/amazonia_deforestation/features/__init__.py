@@ -1,7 +1,7 @@
-"""Ingeniería de características contextuales y de textura.
+"""Ingenieria de caracteristicas contextuales y de textura.
 
 Responsabilidades:
-    - Estadísticos de vecindad (media, desviación estándar) en ventanas 3x3 y 5x5.
-    - Métricas de textura GLCM (contraste, homogeneidad, entropía).
-    - Ensamblaje del vector de atributos por píxel para los modelos baseline.
+    - Estadisticos de vecindad (media, desviacion estandar) en ventanas 3x3 y 5x5.
+    - Metricas de textura GLCM (contraste, homogeneidad, entropia).
+    - Ensamblaje del vector de atributos por pixel para los modelos baseline.
 """

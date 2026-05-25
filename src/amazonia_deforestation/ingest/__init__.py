@@ -1,4 +1,4 @@
-"""Acceso a Sentinel-2 vía STAC Earth-Search y construcción de cubos de datos.
+"""Acceso a Sentinel-2 via STAC Earth-Search y construccion de cubos de datos.
 
 Responsabilidades:
     - Consultar la API STAC (pystac-client) sobre el AOI y la ventana temporal.

@@ -4,6 +4,7 @@
 
 # --- Núcleo numérico y de datos ---
 numpy>=1.26,<2.1
+scipy>=1.11
 pandas>=2.1
 pyyaml>=6.0
 tqdm>=4.66

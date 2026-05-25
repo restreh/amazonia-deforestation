@@ -1,10 +1,9 @@
 """Construye las composiciones trimestrales de Sentinel-2 sobre el AOI.
 
-Uso (desde la raíz del repositorio):
-    python scripts/build_composites.py            # corrida completa
+Uso (desde la raiz del repositorio):
+    python scripts/build_composites.py            # ejecucion completa
     python scripts/build_composites.py --limit 8  # prueba: 8 escenas por trimestre
 
-Recomendado correr en SageMaker Studio Lab (más RAM). Requiere internet.
 Dependencias (subconjunto de requirements.txt):
     pip install stackstac pystac-client rioxarray rasterio dask numpy pyyaml
 """
@@ -26,7 +25,7 @@ from amazonia_deforestation.data.composites import build_all_quarters  # noqa: E
 def main() -> None:
     parser = argparse.ArgumentParser(description="Composiciones trimestrales Sentinel-2")
     parser.add_argument("--limit", type=int, default=None,
-                        help="máximo de escenas por trimestre (modo prueba)")
+                        help="maximo de escenas por trimestre (modo prueba)")
     args = parser.parse_args()
 
     config = yaml.safe_load((ROOT / "config" / "config.yaml").read_text(encoding="utf-8"))

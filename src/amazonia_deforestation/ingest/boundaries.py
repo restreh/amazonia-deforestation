@@ -1,12 +1,12 @@
-"""Refinamiento del área de interés a los límites municipales.
+"""Refinamiento del area de interes a los limites municipales.
 
-Carga los polígonos municipales (de un archivo DANE/IGAC indicado en la
-configuración o, en su defecto, del proyecto abierto geoBoundaries), filtra a
-los municipios objetivo, calcula su unión, su bounding box y su área, y guarda
-el límite recortado. Sirve también de base para la segmentación territorial de
+Carga los poligonos municipales (de un archivo DANE/IGAC indicado en la
+configuracion o, en su defecto, del proyecto abierto geoBoundaries), filtra a
+los municipios objetivo, calcula su union, su bounding box y su area, y guarda
+el limite recortado. Sirve tambien de base para la segmentacion territorial de
 resultados que exige la propuesta.
 
-Ejecución:
+Ejecucion:
     python scripts/refine_aoi.py
 """
 

@@ -1,10 +1,10 @@
-"""Consulta de disponibilidad de Sentinel-2 L2A vía STAC Earth-Search.
+"""Consulta de disponibilidad de Sentinel-2 L2A via STAC Earth-Search.
 
-Primer paso del entendimiento de los datos: cuantifica cuántas escenas hay
-sobre el área de interés por trimestre y con qué nubosidad. No requiere
-credenciales de AWS; la API STAC es pública y de solo lectura.
+Primer paso del entendimiento de los datos: cuantifica cuantas escenas hay
+sobre el area de interes por trimestre y con que nubosidad. No requiere
+credenciales de AWS; la API STAC es publica y de solo lectura.
 
-Ejecución:
+Ejecucion:
     python scripts/check_availability.py
 """
 
@@ -28,7 +28,7 @@ class SceneRecord:
 
 
 def open_catalog(stac_url: str) -> Client:
-    """Abre el catálogo STAC en la URL indicada."""
+    """Abre el catalogo STAC en la URL indicada."""
     return Client.open(stac_url)
 
 
@@ -68,7 +68,7 @@ def availability_report(config: dict) -> tuple[pd.DataFrame, pd.DataFrame]:
 
     Devuelve (detalle, resumen):
         detalle  una fila por escena (id, fecha, nubosidad, tile, trimestre).
-        resumen  una fila por trimestre con conteos y estadísticos de nubosidad.
+        resumen  una fila por trimestre con conteos y estadisticos de nubosidad.
     """
     s2 = config["data_sources"]["sentinel2"]
     bbox = config["aoi"]["bbox_geographic"]

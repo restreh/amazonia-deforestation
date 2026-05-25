@@ -1,11 +1,11 @@
-"""Lectura de Hansen Global Forest Change v1.12 sobre el área de interés.
+"""Lectura de Hansen Global Forest Change v1.12 sobre el area de interes.
 
-Lee por ventana (vía /vsicurl/, sin descargar el tile completo de 10x10 grados)
-las capas de Hansen GFC y deriva la etiqueta binaria de deforestación para el
-año objetivo. Hansen GFC está en EPSG:4326, igual que el bbox del AOI, por lo
-que no requiere reproyección.
+Lee por ventana (via /vsicurl/, sin descargar el tile completo de 10x10 grados)
+las capas de Hansen GFC y deriva la etiqueta binaria de deforestacion para el
+ano objetivo. Hansen GFC esta en EPSG:4326, igual que el bbox del AOI, por lo
+que no requiere reproyeccion.
 
-Ejecución:
+Ejecucion:
     python scripts/download_labels.py
 """
 
@@ -79,7 +79,7 @@ def write_geotiff(path: Path, data: np.ndarray, profile: dict) -> None:
 
 
 def build_label(config: dict, out_dir: Path) -> Path:
-    """Deriva la etiqueta binaria de deforestación del año objetivo y la guarda.
+    """Deriva la etiqueta binaria de deforestacion del ano objetivo y la guarda.
 
     label = 1 donde lossyear == (target_year - 2000); 0 en el resto.
     """
@@ -92,7 +92,7 @@ def build_label(config: dict, out_dir: Path) -> Path:
     if len(tiles) > 1:
         raise NotImplementedError(
             f"El AOI cruza varios tiles Hansen {tiles}; falta el mosaico. "
-            "Ajustar el bbox o implementar la unión de tiles."
+            "Ajustar el bbox o implementar la union de tiles."
         )
     tile = tiles[0]
 
@@ -107,8 +107,8 @@ def build_label(config: dict, out_dir: Path) -> Path:
     n_pos = int(label.sum())
     n_tot = int(label.size)
     print(f"Tile Hansen: {tile}")
-    print(f"Ventana del AOI: {label.shape[0]} x {label.shape[1]} píxeles")
-    print(f"Píxeles de pérdida {target_year}: {n_pos} de {n_tot} "
+    print(f"Ventana del AOI: {label.shape[0]} x {label.shape[1]} pixeles")
+    print(f"Pixeles de perdida {target_year}: {n_pos} de {n_tot} "
           f"(prevalencia {n_pos / n_tot:.4%})")
     print(f"Etiqueta guardada en {label_path}")
     return label_path

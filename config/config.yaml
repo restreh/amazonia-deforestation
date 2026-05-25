@@ -66,8 +66,29 @@ features:
 modeling:
   positive_class: 1                 # 1 = pérdida de cobertura (deforestación)
   split_ratios: { train: 0.70, val: 0.15, test: 0.15 }
+  split_seed: 42                    # semilla para asignar bloques espaciales a train/val/test
+  sampling: { neg_per_pos: 10, seed: 42 }   # muestreo balanceado: negativos por cada positivo en entrenamiento
   focal_loss: { alpha: 0.25, gamma: 2.0 }
   baselines: [random_forest, xgboost]
+  cv_folds: 5                       # pliegues de validación cruzada espacial (GroupKFold por bloque)
+  max_train_rows: 1200000           # comparación pareada: ambos modelos sobre las mismas filas
+  rf_max_rows: 1200000              # igual a max_train_rows -> RF y XGBoost ven el mismo conjunto
+  random_forest:
+    n_estimators: 300
+    max_depth: 24                   # acota el tamaño del árbol (memoria/tiempo); a 2,86 M de filas sin costo de exactitud
+    max_features: "sqrt"
+    min_samples_leaf: 50            # evita hojas diminutas que ajustan ruido a esta escala de datos
+    max_samples: 0.5                # fracción de filas por árbol (bootstrap acotado)
+    class_weight: "balanced_subsample"
+    n_jobs: -1
+  xgboost:
+    n_estimators: 400
+    max_depth: 6
+    learning_rate: 0.1
+    subsample: 0.8
+    colsample_bytree: 0.8
+    tree_method: "hist"
+    n_jobs: -1
   unet:
     encoder: "resnet34"
     encoder_weights: "imagenet"
@@ -78,6 +99,8 @@ modeling:
 evaluation:
   primary_metric: "f1"
   polygon_iou_threshold: 0.3
+  min_polygon_pixels: 6           # area mínima de parche (~0.24 ha a 20 m) tras reconstrucción
+  morphology: true                # cierre+apertura sobre la predicción antes de reconstruir parches
   bootstrap_iterations: 1000
   success_criteria: { f1_pixel_min: 0.70, iou_polygon_min: 0.40, inference_minutes_max: 10 }
 

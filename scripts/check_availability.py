@@ -1,9 +1,9 @@
 """Reporta la disponibilidad y nubosidad de Sentinel-2 sobre el AOI por trimestre.
 
-Uso (desde la raíz del repositorio):
+Uso (desde la raiz del repositorio):
     python scripts/check_availability.py
 
-Solo requiere internet (la API STAC es pública). Dependencias mínimas:
+Requiere internet. Dependencias minimas:
     pip install pystac-client pandas pyyaml
 """
 

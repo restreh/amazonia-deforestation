@@ -1,10 +1,10 @@
-"""Refina el AOI a los límites municipales y reporta bbox y área.
+"""Refina el AOI a los limites municipales y reporta bbox y area.
 
-Uso (desde la raíz del repositorio):
+Uso (desde la raiz del repositorio):
     python scripts/refine_aoi.py
 
-Requiere internet (descarga límites de geoBoundaries si no se da un archivo local).
-Dependencias mínimas:
+Requiere internet (descarga limites de geoBoundaries si no se da un archivo local).
+Dependencias minimas:
     pip install geopandas pyyaml
 """
 
@@ -24,7 +24,7 @@ from amazonia_deforestation.ingest.boundaries import refine_aoi  # noqa: E402
 def main() -> None:
     config = yaml.safe_load((ROOT / "config" / "config.yaml").read_text(encoding="utf-8"))
     out_dir = ROOT / "data" / "external"
-    print("Cargando límites municipales...")
+    print("Cargando limites municipales...")
     refine_aoi(config, out_dir)
 
 

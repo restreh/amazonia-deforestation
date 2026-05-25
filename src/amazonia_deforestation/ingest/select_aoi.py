@@ -1,19 +1,19 @@
-"""Selección dirigida por datos del AOI de trabajo (~5.000 km²).
+"""Seleccion dirigida por datos del AOI de trabajo (~5.000 km2).
 
-Los municipios objetivo suman ~30.000 km², muy por encima del alcance de la
-propuesta. Este módulo ubica una ventana del área objetivo, dentro de los
-municipios, que maximiza la deforestación capturada según Hansen GFC del año
-objetivo. Así el AOI queda anclado al núcleo activo, no a un rectángulo
+Los municipios objetivo suman ~30.000 km2, muy por encima del alcance de la
+propuesta. Este modulo ubica una ventana del area objetivo, dentro de los
+municipios, que maximiza la deforestacion capturada segun Hansen GFC del ano
+objetivo. Asi el AOI queda anclado al nucleo activo, no a un rectangulo
 arbitrario.
 
 Procedimiento:
-    1. Lee el límite municipal y la pérdida Hansen del año objetivo sobre su bbox.
-    2. Enmascara la pérdida a los polígonos municipales.
-    3. Agrega a una grilla gruesa y desliza una ventana del área objetivo,
-       eligiendo la de mayor pérdida total (suma por imagen integral).
-    4. Devuelve el bbox de esa ventana y la fracción de pérdida capturada.
+    1. Lee el limite municipal y la perdida Hansen del ano objetivo sobre su bbox.
+    2. Enmascara la perdida a los poligonos municipales.
+    3. Agrega a una grilla gruesa y desliza una ventana del area objetivo,
+       eligiendo la de mayor perdida total (suma por imagen integral).
+    4. Devuelve el bbox de esa ventana y la fraccion de perdida capturada.
 
-Ejecución:
+Ejecucion:
     python scripts/select_aoi.py
 """
 
@@ -51,7 +51,7 @@ def best_window_sum(grid: np.ndarray, wy: int, wx: int) -> tuple[int, int, int]:
 
 
 def select_aoi(config: dict, boundary_path: Path) -> dict:
-    """Selecciona el AOI de trabajo sobre el núcleo de deforestación dentro de los municipios."""
+    """Selecciona el AOI de trabajo sobre el nucleo de deforestacion dentro de los municipios."""
     hansen = config["data_sources"]["hansen_gfc"]
     target_year = config["temporal"]["target_year"]
     year_code = target_year - 2000
@@ -72,7 +72,7 @@ def select_aoi(config: dict, boundary_path: Path) -> dict:
         wt = src.window_transform(window)
 
     loss = (lossyear == year_code).astype(np.uint32)
-    # Enmascara a los polígonos municipales.
+    # Enmascara a los poligonos municipales.
     muni_mask = rasterize(
         [(geom, 1) for geom in muni.geometry],
         out_shape=loss.shape, transform=wt, fill=0, dtype="uint8",
@@ -80,7 +80,7 @@ def select_aoi(config: dict, boundary_path: Path) -> dict:
     loss *= muni_mask
     total_loss = int(loss.sum())
 
-    # Agregación a grilla gruesa de ~1 km.
+    # Agregacion a grilla gruesa de ~1 km.
     px_deg_x = wt.a
     px_deg_y = -wt.e
     mid_lat = (bbox[1] + bbox[3]) / 2
@@ -100,7 +100,7 @@ def select_aoi(config: dict, boundary_path: Path) -> dict:
 
     r0, c0, captured = best_window_sum(grid, wy, wx)
 
-    # Coordenadas geográficas de la ventana.
+    # Coordenadas geograficas de la ventana.
     px_x0, px_y0 = c0 * cell, r0 * cell
     px_x1, px_y1 = (c0 + wx) * cell, (r0 + wy) * cell
     lon_min, lat_max = wt * (px_x0, px_y0)
@@ -110,10 +110,10 @@ def select_aoi(config: dict, boundary_path: Path) -> dict:
     area_km2 = float((wx * cell_km_x) * (wy * cell_km_y))
 
     print(f"Tile Hansen: {tiles[0]}")
-    print(f"Pérdida {target_year} dentro de los municipios: {total_loss:,} píxeles (30 m)")
+    print(f"Perdida {target_year} dentro de los municipios: {total_loss:,} pixeles (30 m)")
     print(f"AOI seleccionado bbox (lon_min, lat_min, lon_max, lat_max): {aoi_bbox}")
-    print(f"Área del AOI: {area_km2:,.0f} km^2")
+    print(f"Area del AOI: {area_km2:,.0f} km^2")
     frac = captured / total_loss if total_loss else 0
-    print(f"Pérdida capturada por el AOI: {captured:,} píxeles ({frac:.1%} del total municipal)")
+    print(f"Perdida capturada por el AOI: {captured:,} pixeles ({frac:.1%} del total municipal)")
     print("\nActualiza config/config.yaml -> aoi.bbox_geographic con el bbox de arriba.")
     return {"bbox_geographic": aoi_bbox, "area_km2": area_km2, "captured_fraction": frac}

@@ -30,6 +30,7 @@ data/external/*
 models/*.pt
 models/*.pkl
 models/*.joblib
+models/*.json
 mlruns/
 mlartifacts/
 
@@ -40,6 +41,9 @@ mlartifacts/
 *.key
 aws_credentials*
 .aws/
+
+# --- Documentos de referencia (no se versionan: propuesta y plantilla del informe) ---
+*.docx
 
 # --- Salidas y temporales ---
 *.log

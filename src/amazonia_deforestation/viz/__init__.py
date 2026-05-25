@@ -1,8 +1,8 @@
-"""Utilidades de visualización de resultados.
+"""Utilidades de visualizacion de resultados.
 
 Responsabilidades:
-    - Mapas de detección (modelo, Hansen GFC, SMByC-IDEAM).
-    - Series temporales de hectáreas detectadas por trimestre.
-    - Mapas de diagnóstico espacial (I de Moran local, residuos por bloque).
+    - Mapas de deteccion (modelo, Hansen GFC, SMByC-IDEAM).
+    - Series temporales de hectareas detectadas por trimestre.
+    - Mapas de diagnostico espacial (I de Moran local, residuos por bloque).
     - Componentes reutilizables para el tablero Streamlit.
 """
