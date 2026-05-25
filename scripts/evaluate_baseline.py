@@ -35,7 +35,7 @@ VAL_CODE, TEST_CODE = 2, 3
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Evaluacion del baseline (pixel y poligono)")
-    ap.add_argument("--model", default="xgboost", choices=["xgboost", "random_forest"])
+    ap.add_argument("--model", default="xgboost", choices=["xgboost", "random_forest", "unet"])
     args = ap.parse_args()
 
     config = yaml.safe_load((ROOT / "config" / "config.yaml").read_text(encoding="utf-8"))

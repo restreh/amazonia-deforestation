@@ -93,6 +93,12 @@ modeling:
     encoder: "resnet34"
     encoder_weights: "imagenet"
     window_size: 256
+    patch_stride: 128             # paso de la grilla de recortes (solapamiento para aumentar datos)
+    min_patch_pixels: 64          # minimo de pixeles del split en un recorte para incluirlo
+    batch_size: 8                 # ajustar a la VRAM disponible (16 GB admite mas)
+    epochs: 40
+    learning_rate: 0.0003
+    num_workers: 4
   mlflow_tracking_uri: "file:./mlruns"
 
 # --- Evaluación ---
