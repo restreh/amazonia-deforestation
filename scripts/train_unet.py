@@ -8,6 +8,11 @@ mediante un peso por pixel (la perdida solo cuenta pixeles del split). Entrena c
 perdida focal, valida cada epoch sobre los bloques de validacion (AUC-PR enmascarado)
 y guarda el mejor modelo en models/unet.pt. Registra en MLflow si esta instalado.
 
+Optimizador AdamW con weight_decay, scheduler ReduceLROnPlateau sobre val_AUC-PR y
+early stopping configurables desde config.yaml. Aumentaciones (flips H/V y rot90)
+sobre los recortes de entrenamiento. Mascaras de validez por trimestre (4 canales
+extra) cuando validity_masks=true.
+
 Dependencias: torch, segmentation-models-pytorch, scikit-learn, rasterio, numpy, pyyaml.
 Instalar PyTorch con soporte CUDA segun pytorch.org.
 """
@@ -41,16 +46,24 @@ def main() -> None:
     label = ROOT / "data" / "interim" / "label_2024_20m.tif"
     split = ROOT / "data" / "interim" / "split_blocks.tif"
     size = u["window_size"]
+    use_validity = bool(u.get("validity_masks", False))
+    use_augment = bool(u.get("augment", False))
+    weight_decay = float(u.get("weight_decay", 0.0))
+    lr_patience = int(u.get("lr_patience", 3))
+    es_patience = int(u.get("early_stopping_patience", 8))
 
-    spec = channel_spec(config, comp, idx)
+    spec = channel_spec(config, comp, idx, validity_masks=use_validity)
     in_ch = len(spec)
     records, _ = build_patch_index(split, size, u["patch_stride"])
     tr = select_patches(records, "train", u["min_patch_pixels"])
     va = select_patches(records, "val", u["min_patch_pixels"])
-    print("Canales: " + str(in_ch) + " | recortes train: " + str(len(tr)) + " | val: " + str(len(va)))
+    print("Canales: " + str(in_ch) + " (validez=" + str(use_validity) + ")"
+          + " | recortes train: " + str(len(tr)) + " | val: " + str(len(va)))
 
-    ds_tr = PatchDataset(config, comp, idx, label, split, tr, "train", size)
-    ds_va = PatchDataset(config, comp, idx, label, split, va, "val", size)
+    ds_tr = PatchDataset(config, comp, idx, label, split, tr, "train", size,
+                         validity_masks=use_validity, augment=use_augment)
+    ds_va = PatchDataset(config, comp, idx, label, split, va, "val", size,
+                         validity_masks=use_validity, augment=False)
     dl_tr = DataLoader(ds_tr, batch_size=u["batch_size"], shuffle=True,
                        num_workers=u["num_workers"], drop_last=True)
     dl_va = DataLoader(ds_va, batch_size=u["batch_size"], shuffle=False,
@@ -59,7 +72,10 @@ def main() -> None:
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print("Dispositivo: " + device)
     model = build_unet(in_ch, u["encoder"], u["encoder_weights"]).to(device)
-    opt = torch.optim.Adam(model.parameters(), lr=u["learning_rate"])
+    opt = torch.optim.AdamW(model.parameters(), lr=u["learning_rate"],
+                            weight_decay=weight_decay)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        opt, mode="max", factor=0.5, patience=lr_patience)
 
     try:
         import mlflow
@@ -68,7 +84,10 @@ def main() -> None:
         run = mlflow.start_run(run_name="unet_resnet34")
         mlflow.log_params({"encoder": u["encoder"], "in_channels": in_ch,
                            "batch_size": u["batch_size"], "lr": u["learning_rate"],
-                           "epochs": u["epochs"], "alpha": fl["alpha"], "gamma": fl["gamma"]})
+                           "weight_decay": weight_decay, "epochs": u["epochs"],
+                           "alpha": fl["alpha"], "gamma": fl["gamma"],
+                           "validity_masks": use_validity, "augment": use_augment,
+                           "lr_patience": lr_patience, "es_patience": es_patience})
     except Exception:
         print("MLflow no disponible; se omite el registro.")
         mlflow = None
@@ -76,6 +95,7 @@ def main() -> None:
     models_dir = ROOT / "models"
     models_dir.mkdir(exist_ok=True)
     best_ap = -1.0
+    patience_left = es_patience
     for epoch in range(1, u["epochs"] + 1):
         model.train()
         running = 0.0
@@ -100,14 +120,26 @@ def main() -> None:
                 ps.append(p); ts.append(t)
         p = np.concatenate(ps); t = np.concatenate(ts)
         ap = float(average_precision_score(t, p)) if t.sum() > 0 else 0.0
-        print(f"epoch {epoch:3d}  focal_loss {train_loss:.4f}  val_AUC-PR {ap:.4f}", flush=True)
+        scheduler.step(ap)
+        current_lr = opt.param_groups[0]["lr"]
+        print(f"epoch {epoch:3d}  focal_loss {train_loss:.4f}  val_AUC-PR {ap:.4f}"
+              f"  lr {current_lr:.2e}", flush=True)
         if mlflow:
             mlflow.log_metric("train_focal_loss", train_loss, step=epoch)
             mlflow.log_metric("val_auc_pr", ap, step=epoch)
+            mlflow.log_metric("lr", current_lr, step=epoch)
         if ap > best_ap:
             best_ap = ap
+            patience_left = es_patience
             torch.save({"state_dict": model.state_dict(), "in_channels": in_ch,
-                        "encoder": u["encoder"]}, models_dir / "unet.pt")
+                        "encoder": u["encoder"],
+                        "validity_masks": use_validity}, models_dir / "unet.pt")
+        else:
+            patience_left -= 1
+            if patience_left <= 0:
+                print("Early stopping en epoch " + str(epoch)
+                      + " (sin mejora en " + str(es_patience) + " epocas)")
+                break
 
     print("Mejor val AUC-PR: " + format(best_ap, ".4f") + " | modelo en " + str(models_dir / "unet.pt"))
     if mlflow:

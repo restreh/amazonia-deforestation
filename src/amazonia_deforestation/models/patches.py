@@ -5,13 +5,18 @@ recorte apila como canales las bandas de la composicion mediana y los indices de
 cuatro trimestres (10 + 3 por trimestre = 52 canales). La mascara objetivo es la
 etiqueta binaria de deforestacion alineada a 20 m.
 
+Opcionalmente se anaden 4 canales de mascara de validez (uno por trimestre), con 1
+donde la observacion es real y 0 donde habia NaN. Eso permite que el modelo distinga
+"sin dato" de "reflectancia cero", que con el relleno simple eran indistinguibles. Con
+mascaras activas el numero de canales pasa de 52 a 56.
+
 Para respetar la particion espacial por bloques sin fuga de etiqueta, cada recorte
 trae un peso por pixel igual a 1 en los pixeles del split correspondiente y 0 en el
 resto; la perdida y las metricas se calculan solo donde el peso es 1. Asi un pixel de
 validacion o prueba nunca aporta a la perdida de entrenamiento.
 
-Las composiciones tienen NaN donde la nube fue enmascarada; los canales se escalan y
-los NaN se rellenan con 0, valor neutro tras el escalado.
+Durante entrenamiento se aplican aumentaciones (flips H/V y rot90) consistentes sobre
+imagen, etiqueta y peso. En validacion y prueba no se aumenta.
 """
 
 from __future__ import annotations
@@ -27,8 +32,13 @@ REFLECTANCE_SCALE = 10000.0   # numero digital Sentinel-2 a reflectancia aproxim
 N_SPECTRAL = 10               # bandas de la composicion mediana
 
 
-def channel_spec(config, composites_dir, indices_dir):
-    """Lista ordenada de canales (ruta, banda, nombre): mediana + indices por trimestre."""
+def channel_spec(config, composites_dir, indices_dir, validity_masks=False):
+    """Lista ordenada de canales (ruta, banda, nombre, tipo).
+
+    Orden: por trimestre, primero las 10 bandas espectrales y luego los 3 indices. Si
+    validity_masks=True se anaden al final 4 canales (uno por trimestre) con tipo
+    "validity": valen 1 donde hay observacion real y 0 donde habia NaN.
+    """
     quarters = [q["id"] for q in config["temporal"]["composite_quarters"]]
     spec = []
     for qid in quarters:
@@ -42,15 +52,27 @@ def channel_spec(config, composites_dir, indices_dir):
             inames = src.descriptions
         for bi in range(1, src.count + 1):
             spec.append((idx, bi, qid + "_" + (inames[bi - 1] or f"i{bi}"), "index"))
+    if validity_masks:
+        for qid in quarters:
+            med = Path(composites_dir) / ("composite_" + qid + "_median.tif")
+            spec.append((med, 1, qid + "_validity", "validity"))
     return spec
 
 
 def read_stack(spec, window):
-    """Lee los canales en la ventana dada y devuelve un arreglo (C, H, W) escalado, NaN->0."""
+    """Lee los canales en la ventana dada y devuelve un arreglo (C, H, W).
+
+    Canales "spectral" se dividen por REFLECTANCE_SCALE; "index" se dejan en su escala
+    nativa [-1, 1]; en ambos casos los NaN se rellenan con 0. Canales "validity"
+    devuelven 1 donde la lectura no es NaN y 0 donde si lo es.
+    """
     chans = []
     for path, bi, _name, kind in spec:
         with rasterio.open(path) as src:
             a = src.read(bi, window=window).astype("float32")
+        if kind == "validity":
+            chans.append((~np.isnan(a)).astype("float32"))
+            continue
         if kind == "spectral":
             a = a / REFLECTANCE_SCALE
         a = np.nan_to_num(a, nan=0.0)
@@ -82,21 +104,64 @@ def select_patches(records, split, min_pixels=1):
     return [r for r in records if r[key] >= min_pixels]
 
 
+def _augment(image, label, weight, rng):
+    """Aplica flips H/V y rot90 aleatorios de forma consistente.
+
+    image: (C, H, W); label y weight: (H, W). Se rota sobre los dos ultimos ejes.
+    """
+    if rng.random() < 0.5:
+        image = image[:, :, ::-1]
+        label = label[:, ::-1]
+        weight = weight[:, ::-1]
+    if rng.random() < 0.5:
+        image = image[:, ::-1, :]
+        label = label[::-1, :]
+        weight = weight[::-1, :]
+    k = int(rng.integers(0, 4))
+    if k:
+        image = np.rot90(image, k=k, axes=(1, 2))
+        label = np.rot90(label, k=k)
+        weight = np.rot90(weight, k=k)
+    return (np.ascontiguousarray(image),
+            np.ascontiguousarray(label),
+            np.ascontiguousarray(weight))
+
+
 class PatchDataset:
     """Dataset de recortes para PyTorch. Devuelve (imagen C x H x W, etiqueta H x W, peso H x W).
 
     El peso es 1 en los pixeles del split objetivo y 0 en el resto. Se importa torch de
-    forma diferida para poder construir el indice de recortes sin torch instalado.
+    forma diferida para poder construir el indice de recortes sin torch instalado. Si
+    augment=True (solo train), aplica flips H/V y rot90 aleatorios consistentes.
     """
 
     def __init__(self, config, composites_dir, indices_dir, label_path, split_path,
-                 records, split, size):
-        self.spec = channel_spec(config, composites_dir, indices_dir)
+                 records, split, size, validity_masks=False, augment=False, seed=None):
+        self.spec = channel_spec(config, composites_dir, indices_dir,
+                                 validity_masks=validity_masks)
         self.label_path = str(label_path)
         self.split_path = str(split_path)
         self.records = records
         self.code = {"train": TRAIN_CODE, "val": VAL_CODE, "test": TEST_CODE}[split]
         self.size = size
+        self.augment = bool(augment)
+        # rng por instancia; los workers del DataLoader se reseteanan en _ensure_rng
+        self._seed = seed
+        self._rng = None
+        self._worker = None
+
+    def _ensure_rng(self):
+        import os
+        try:
+            import torch
+            info = torch.utils.data.get_worker_info()
+            wid = info.id if info is not None else -1
+        except Exception:
+            wid = -1
+        if self._rng is None or self._worker != wid:
+            base = self._seed if self._seed is not None else int.from_bytes(os.urandom(4), "little")
+            self._rng = np.random.default_rng((base, wid))
+            self._worker = wid
 
     def __len__(self):
         return len(self.records)
@@ -111,6 +176,9 @@ class PatchDataset:
         with rasterio.open(self.split_path) as src:
             split = src.read(1, window=win)
         weight = (split == self.code).astype("float32")
+        if self.augment:
+            self._ensure_rng()
+            image, label, weight = _augment(image, label, weight, self._rng)
         return (torch.from_numpy(image),
                 torch.from_numpy(label),
                 torch.from_numpy(weight))

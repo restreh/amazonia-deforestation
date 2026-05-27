@@ -45,6 +45,9 @@ aws_credentials*
 # --- Documentos de referencia (no se versionan: propuesta y plantilla del informe) ---
 *.docx
 
+# --- Notas internas de trabajo con Claude (no se versionan) ---
+CLAUDE.md
+
 # --- Salidas y temporales ---
 *.log
 .cache/

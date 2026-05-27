@@ -43,9 +43,15 @@ def main() -> None:
 
     size = u["window_size"]
     stride = size // 2
-    spec = channel_spec(config, comp, idx)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     ckpt = torch.load(ckpt_path, map_location=device)
+    use_validity = bool(ckpt.get("validity_masks", u.get("validity_masks", False)))
+    spec = channel_spec(config, comp, idx, validity_masks=use_validity)
+    if len(spec) != ckpt["in_channels"]:
+        raise RuntimeError(
+            "Inconsistencia de canales: spec=" + str(len(spec))
+            + " vs checkpoint=" + str(ckpt["in_channels"])
+            + ". Revisa validity_masks en config.yaml.")
     model = build_unet(ckpt["in_channels"], ckpt.get("encoder", u["encoder"]),
                        encoder_weights=None).to(device)
     model.load_state_dict(ckpt["state_dict"])
