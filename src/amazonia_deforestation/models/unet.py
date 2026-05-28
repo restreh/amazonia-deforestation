@@ -1,12 +1,14 @@
-"""U-Net con encoder ResNet-34 y perdida focal para segmentacion binaria.
+"""U-Net con encoder ResNet-34 y perdidas focal y Dice para segmentacion binaria.
 
 El modelo se construye con segmentation_models_pytorch. La entrada tiene tantos
-canales como capas apiladas (52 por defecto: bandas de la mediana e indices de los
-cuatro trimestres) y la salida es un mapa de logits de un canal.
+canales como capas apiladas (56 por defecto con mascaras de validez) y la salida es
+un mapa de logits de un canal.
 
-La perdida focal (Lin et al., 2017) mitiga el desbalance severo de clases. Se aplica
-con un peso por pixel: solo los pixeles del split objetivo (peso 1) aportan, de modo
-que validacion y prueba nunca contaminan el entrenamiento.
+La perdida focal (Lin et al., 2017) mitiga el desbalance severo de clases. La
+perdida Dice (Milletari et al., 2016) optimiza el solape directo y empuja el recall
+en clases raras. Ambas se aplican con un peso por pixel, asi solo los pixeles del
+split objetivo (peso 1) aportan y validacion o prueba nunca contaminan el
+entrenamiento. train_unet.py combina ambas con coeficientes configurables.
 """
 
 from __future__ import annotations
@@ -30,8 +32,8 @@ def build_unet(in_channels, encoder="resnet34", encoder_weights="imagenet", clas
 def focal_loss(logits, target, weight, alpha=0.25, gamma=2.0):
     """Perdida focal binaria con logits y peso por pixel.
 
-    logits, target, weight: tensores de igual forma (N, 1, H, W) o (N, H, W).
-    Devuelve un escalar: promedio de la perdida sobre los pixeles con peso > 0.
+    logits, target, weight tienen igual forma (N, 1, H, W). Devuelve un escalar con el
+    promedio de la perdida sobre los pixeles con peso > 0.
     """
     ce = F.binary_cross_entropy_with_logits(logits, target, reduction="none")
     p = torch.sigmoid(logits)
@@ -41,6 +43,22 @@ def focal_loss(logits, target, weight, alpha=0.25, gamma=2.0):
     loss = loss * weight
     denom = weight.sum().clamp(min=1.0)
     return loss.sum() / denom
+
+
+def dice_loss(logits, target, weight, eps=1.0):
+    """Perdida Dice binaria con peso por pixel, agregada por muestra.
+
+    logits, target, weight tienen forma (N, 1, H, W). Calcula el Dice de cada muestra
+    sobre los pixeles con peso > 0 y devuelve 1 - mean(dice_n). El eps en numerador y
+    denominador estabiliza recortes con pocos positivos.
+    """
+    p = torch.sigmoid(logits) * weight
+    t = target * weight
+    dims = (1, 2, 3)
+    inter = (p * t).sum(dim=dims)
+    denom = p.sum(dim=dims) + t.sum(dim=dims)
+    dice = (2.0 * inter + eps) / (denom + eps)
+    return (1.0 - dice).mean()
 
 
 @torch.no_grad()

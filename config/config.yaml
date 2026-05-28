@@ -104,6 +104,7 @@ modeling:
     augment: true                 # flips H/V y rot90 aleatorios solo en train
     validity_masks: true          # 4 canales extra: 1 donde hay observacion real, 0 donde NaN
     standardize: true             # (x - mu) / sigma por canal con stats de compute_channel_stats.py
+    dice_weight: 0.5              # mezcla focal+Dice; 0.5 = (0.5*focal + 0.5*dice), 0 desactiva Dice
     num_workers: 4
   mlflow_tracking_uri: "file:./mlruns"
 
