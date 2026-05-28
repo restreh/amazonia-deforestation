@@ -13,6 +13,7 @@ Dependencias: torch, segmentation-models-pytorch, rasterio, numpy, pyyaml.
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -25,6 +26,26 @@ import yaml  # noqa: E402
 
 from amazonia_deforestation.models.patches import channel_spec, read_stack  # noqa: E402
 from amazonia_deforestation.models.unet import build_unet  # noqa: E402
+
+
+def resolve_stats(ckpt, expected_n, root):
+    """Recupera (means, stds) desde el checkpoint si estan; si no, desde el JSON."""
+    if "means" in ckpt and "stds" in ckpt:
+        means = np.asarray(ckpt["means"], dtype="float32")
+        stds = np.asarray(ckpt["stds"], dtype="float32")
+        return means, stds
+    stats_path = root / "data" / "interim" / "channel_stats.json"
+    if not stats_path.exists():
+        raise FileNotFoundError(
+            "El checkpoint no tiene stats embebidos y falta " + str(stats_path) + ".")
+    obj = json.loads(stats_path.read_text(encoding="utf-8"))
+    if int(obj.get("n_channels", -1)) != expected_n:
+        raise RuntimeError(
+            "Inconsistencia en " + str(stats_path)
+            + ": n_channels=" + str(obj.get("n_channels"))
+            + " vs spec=" + str(expected_n) + ".")
+    return (np.asarray(obj["means"], dtype="float32"),
+            np.asarray(obj["stds"], dtype="float32"))
 
 
 def main() -> None:
@@ -46,12 +67,14 @@ def main() -> None:
     device = "cuda" if torch.cuda.is_available() else "cpu"
     ckpt = torch.load(ckpt_path, map_location=device)
     use_validity = bool(ckpt.get("validity_masks", u.get("validity_masks", False)))
+    use_standardize = bool(ckpt.get("standardize", u.get("standardize", False)))
     spec = channel_spec(config, comp, idx, validity_masks=use_validity)
     if len(spec) != ckpt["in_channels"]:
         raise RuntimeError(
             "Inconsistencia de canales: spec=" + str(len(spec))
             + " vs checkpoint=" + str(ckpt["in_channels"])
             + ". Revisa validity_masks en config.yaml.")
+    stats = resolve_stats(ckpt, len(spec), ROOT) if use_standardize else None
     model = build_unet(ckpt["in_channels"], ckpt.get("encoder", u["encoder"]),
                        encoder_weights=None).to(device)
     model.load_state_dict(ckpt["state_dict"])
@@ -75,7 +98,7 @@ def main() -> None:
                 if not np.isin(split[r0:r0 + size, c0:c0 + size], eval_codes).any():
                     continue
                 win = Window(c0, r0, size, size)
-                image = read_stack(spec, win)
+                image = read_stack(spec, win, stats=stats)
                 x = torch.from_numpy(image).unsqueeze(0).to(device)
                 prob = torch.sigmoid(model(x))[0, 0].cpu().numpy()
                 acc[r0:r0 + size, c0:c0 + size] += prob

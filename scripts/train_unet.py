@@ -19,6 +19,7 @@ Instalar PyTorch con soporte CUDA segun pytorch.org.
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -31,6 +32,32 @@ import yaml  # noqa: E402
 from amazonia_deforestation.models.patches import (  # noqa: E402
     PatchDataset, build_patch_index, channel_spec, select_patches)
 from amazonia_deforestation.models.unet import build_unet, focal_loss, masked_scores  # noqa: E402
+
+
+def load_stats(stats_path, expected_n, expected_validity):
+    """Carga channel_stats.json y devuelve (means, stds) como numpy float32.
+
+    Verifica que el numero de canales y el flag de validez coincidan con la corrida
+    actual. Falla con mensaje claro si no.
+    """
+    if not stats_path.exists():
+        raise FileNotFoundError(
+            "Falta " + str(stats_path) + ". Corre primero "
+            "scripts/compute_channel_stats.py o pon standardize=false en config.yaml.")
+    obj = json.loads(stats_path.read_text(encoding="utf-8"))
+    if int(obj.get("n_channels", -1)) != expected_n:
+        raise RuntimeError(
+            "Inconsistencia en " + str(stats_path)
+            + ": n_channels=" + str(obj.get("n_channels"))
+            + " vs spec=" + str(expected_n)
+            + ". Vuelve a correr compute_channel_stats.py.")
+    if bool(obj.get("validity_masks", False)) != bool(expected_validity):
+        raise RuntimeError(
+            "Inconsistencia de validity_masks entre stats y config. "
+            "Vuelve a correr compute_channel_stats.py.")
+    means = np.asarray(obj["means"], dtype="float32")
+    stds = np.asarray(obj["stds"], dtype="float32")
+    return means, stds
 
 
 def main() -> None:
@@ -48,6 +75,7 @@ def main() -> None:
     size = u["window_size"]
     use_validity = bool(u.get("validity_masks", False))
     use_augment = bool(u.get("augment", False))
+    use_standardize = bool(u.get("standardize", False))
     weight_decay = float(u.get("weight_decay", 0.0))
     lr_patience = int(u.get("lr_patience", 3))
     es_patience = int(u.get("early_stopping_patience", 8))
@@ -57,13 +85,20 @@ def main() -> None:
     records, _ = build_patch_index(split, size, u["patch_stride"])
     tr = select_patches(records, "train", u["min_patch_pixels"])
     va = select_patches(records, "val", u["min_patch_pixels"])
-    print("Canales: " + str(in_ch) + " (validez=" + str(use_validity) + ")"
+    print("Canales: " + str(in_ch) + " (validez=" + str(use_validity)
+          + ", estandarizado=" + str(use_standardize) + ")"
           + " | recortes train: " + str(len(tr)) + " | val: " + str(len(va)))
 
+    stats = None
+    if use_standardize:
+        stats_path = ROOT / "data" / "interim" / "channel_stats.json"
+        stats = load_stats(stats_path, in_ch, use_validity)
+        print("Stats cargadas: " + str(stats_path))
+
     ds_tr = PatchDataset(config, comp, idx, label, split, tr, "train", size,
-                         validity_masks=use_validity, augment=use_augment)
+                         validity_masks=use_validity, augment=use_augment, stats=stats)
     ds_va = PatchDataset(config, comp, idx, label, split, va, "val", size,
-                         validity_masks=use_validity, augment=False)
+                         validity_masks=use_validity, augment=False, stats=stats)
     dl_tr = DataLoader(ds_tr, batch_size=u["batch_size"], shuffle=True,
                        num_workers=u["num_workers"], drop_last=True)
     dl_va = DataLoader(ds_va, batch_size=u["batch_size"], shuffle=False,
@@ -83,10 +118,12 @@ def main() -> None:
         mlflow.set_experiment("unet")
         run = mlflow.start_run(run_name="unet_resnet34")
         mlflow.log_params({"encoder": u["encoder"], "in_channels": in_ch,
+                           "encoder_weights": str(u.get("encoder_weights")),
                            "batch_size": u["batch_size"], "lr": u["learning_rate"],
                            "weight_decay": weight_decay, "epochs": u["epochs"],
                            "alpha": fl["alpha"], "gamma": fl["gamma"],
                            "validity_masks": use_validity, "augment": use_augment,
+                           "standardize": use_standardize,
                            "lr_patience": lr_patience, "es_patience": es_patience})
     except Exception:
         print("MLflow no disponible; se omite el registro.")
@@ -131,9 +168,13 @@ def main() -> None:
         if ap > best_ap:
             best_ap = ap
             patience_left = es_patience
-            torch.save({"state_dict": model.state_dict(), "in_channels": in_ch,
-                        "encoder": u["encoder"],
-                        "validity_masks": use_validity}, models_dir / "unet.pt")
+            ckpt = {"state_dict": model.state_dict(), "in_channels": in_ch,
+                    "encoder": u["encoder"], "validity_masks": use_validity,
+                    "standardize": use_standardize}
+            if stats is not None:
+                ckpt["means"] = stats[0].tolist()
+                ckpt["stds"] = stats[1].tolist()
+            torch.save(ckpt, models_dir / "unet.pt")
         else:
             patience_left -= 1
             if patience_left <= 0:

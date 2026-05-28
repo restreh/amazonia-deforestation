@@ -17,6 +17,11 @@ validacion o prueba nunca aporta a la perdida de entrenamiento.
 
 Durante entrenamiento se aplican aumentaciones (flips H/V y rot90) consistentes sobre
 imagen, etiqueta y peso. En validacion y prueba no se aumenta.
+
+Si se proporcionan estadisticas por canal (media y desviacion calculadas sobre train
+con scripts/compute_channel_stats.py), read_stack estandariza cada canal espectral o
+indice por (x - mu) / sigma. Los NaN se rellenan con la media del canal antes de
+estandarizar, asi quedan en 0 tras el escalado. Los canales de validez no se tocan.
 """
 
 from __future__ import annotations
@@ -59,15 +64,21 @@ def channel_spec(config, composites_dir, indices_dir, validity_masks=False):
     return spec
 
 
-def read_stack(spec, window):
+def read_stack(spec, window, stats=None):
     """Lee los canales en la ventana dada y devuelve un arreglo (C, H, W).
 
-    Canales "spectral" se dividen por REFLECTANCE_SCALE; "index" se dejan en su escala
-    nativa [-1, 1]; en ambos casos los NaN se rellenan con 0. Canales "validity"
-    devuelven 1 donde la lectura no es NaN y 0 donde si lo es.
+    Canales "spectral" se dividen por REFLECTANCE_SCALE y "index" se dejan en su
+    escala nativa [-1, 1]. Canales "validity" devuelven 1 donde la lectura no es NaN
+    y 0 donde si lo es.
+
+    Si stats=(means, stds) viene dado, cada canal espectral o indice se estandariza
+    por (x - mu) / sigma, rellenando antes los NaN con mu del canal. Si stats es None,
+    los NaN se rellenan con 0 (comportamiento previo).
     """
+    if stats is not None:
+        means, stds = stats
     chans = []
-    for path, bi, _name, kind in spec:
+    for ci, (path, bi, _name, kind) in enumerate(spec):
         with rasterio.open(path) as src:
             a = src.read(bi, window=window).astype("float32")
         if kind == "validity":
@@ -75,8 +86,14 @@ def read_stack(spec, window):
             continue
         if kind == "spectral":
             a = a / REFLECTANCE_SCALE
-        a = np.nan_to_num(a, nan=0.0)
-        chans.append(a)
+        if stats is not None:
+            mu = float(means[ci])
+            sigma = float(stds[ci]) if float(stds[ci]) > 0.0 else 1.0
+            a = np.where(np.isnan(a), mu, a)
+            a = (a - mu) / sigma
+        else:
+            a = np.nan_to_num(a, nan=0.0)
+        chans.append(a.astype("float32"))
     return np.stack(chans, axis=0)
 
 
@@ -136,7 +153,8 @@ class PatchDataset:
     """
 
     def __init__(self, config, composites_dir, indices_dir, label_path, split_path,
-                 records, split, size, validity_masks=False, augment=False, seed=None):
+                 records, split, size, validity_masks=False, augment=False,
+                 stats=None, seed=None):
         self.spec = channel_spec(config, composites_dir, indices_dir,
                                  validity_masks=validity_masks)
         self.label_path = str(label_path)
@@ -145,6 +163,7 @@ class PatchDataset:
         self.code = {"train": TRAIN_CODE, "val": VAL_CODE, "test": TEST_CODE}[split]
         self.size = size
         self.augment = bool(augment)
+        self.stats = stats  # (means, stds) o None
         # rng por instancia; los workers del DataLoader se reseteanan en _ensure_rng
         self._seed = seed
         self._rng = None
@@ -170,7 +189,7 @@ class PatchDataset:
         import torch
         r = self.records[i]
         win = Window(r["c0"], r["r0"], self.size, self.size)
-        image = read_stack(self.spec, win)
+        image = read_stack(self.spec, win, stats=self.stats)
         with rasterio.open(self.label_path) as src:
             label = src.read(1, window=win).astype("float32")
         with rasterio.open(self.split_path) as src:
