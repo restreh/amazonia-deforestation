@@ -47,6 +47,7 @@ aws_credentials*
 
 # --- Notas internas de trabajo con Claude (no se versionan) ---
 CLAUDE.md
+.claude/
 
 # --- Salidas y temporales ---
 *.log
