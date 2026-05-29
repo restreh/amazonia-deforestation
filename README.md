@@ -47,8 +47,7 @@ amazonia-deforestation/
 │   ├── features/    Atributos contextuales y métricas de textura GLCM
 │   ├── spatial/     I de Moran, semivariograma, partición por bloques
 │   ├── models/      Random Forest, XGBoost, U-Net, dataset de patches
-│   ├── evaluation/  Métricas pixel y polígono, calibración de umbral
-│   └── viz/         Utilidades de visualización
+│   └── evaluation/  Métricas pixel y polígono, calibración de umbral
 ├── infra/         Infraestructura como código (IAM, S3, Lambda)
 └── dashboards/    Tablero Streamlit
 ```
