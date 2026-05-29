@@ -15,7 +15,9 @@ LOG_KEY="benchmarks/benchmark_${TIMESTAMP}.log"
 exec > >(tee /var/log/benchmark.log) 2>&1
 echo "== Inicio del benchmark $TIMESTAMP =="
 
-dnf install -y python3.12 python3.12-pip gcc gdal gdal-devel proj-devel git tar gzip
+# GDAL no viene en los repos por defecto de AL2023; las wheels de rasterio traen su
+# propio GDAL embebido, asi que no se instala a nivel de sistema.
+dnf install -y python3.12 python3.12-pip gcc git tar gzip
 ln -sf /usr/bin/python3.12 /usr/local/bin/python
 ln -sf /usr/bin/pip3.12 /usr/local/bin/pip
 

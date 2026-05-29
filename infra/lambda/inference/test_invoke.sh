@@ -31,8 +31,15 @@ cat > "$EVENT_FILE" <<EOF
 EOF
 
 echo ">>> Invocando Lambda con ventana [$ROW0,$COL0,$ROW1,$COL1]"
+# AWS CLI en Git Bash Windows necesita ruta nativa para fileb://
+EVENT_NATIVE="$EVENT_FILE"
+RESPONSE_NATIVE="$RESPONSE_FILE"
+if command -v cygpath >/dev/null 2>&1; then
+    EVENT_NATIVE="$(cygpath -w "$EVENT_FILE")"
+    RESPONSE_NATIVE="$(cygpath -w "$RESPONSE_FILE")"
+fi
 aws lambda invoke --function-name "$LAMBDA_NAME" --region "$AWS_REGION" \
     --cli-binary-format raw-in-base64-out \
-    --payload "fileb://$EVENT_FILE" "$RESPONSE_FILE" >/dev/null
+    --payload "fileb://$EVENT_NATIVE" "$RESPONSE_NATIVE" >/dev/null
 
 cat "$RESPONSE_FILE" | python -c "import json,sys; print(json.dumps(json.load(sys.stdin), indent=2))"

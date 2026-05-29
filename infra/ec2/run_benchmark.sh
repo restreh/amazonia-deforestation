@@ -63,10 +63,19 @@ INSTANCE_ID="$(aws ec2 run-instances --region "$AWS_REGION" \
 echo "Instancia: $INSTANCE_ID"
 
 echo ">>> Esperando publicacion del resultado en s3://$BUCKET/$RESULT_PREFIX..."
-RESULT_KEY="${RESULT_PREFIX}benchmark_${TIMESTAMP}.json"
-for i in $(seq 1 60); do   # hasta 60 min
-    if aws s3api head-object --bucket "$BUCKET" --key "$RESULT_KEY" >/dev/null 2>&1; then
-        echo ">>> Resultado disponible tras $i min"
+# El user_data calcula su propio TIMESTAMP al bootear, asi que detectamos el primer
+# JSON nuevo bajo benchmarks/ usando una marca de inicio del polleo. Sale al primer
+# archivo nuevo o al cumplir 60 minutos.
+START_EPOCH="$(date -u +%s)"
+RESULT_KEY=""
+for i in $(seq 1 60); do
+    CANDIDATE="$(aws s3api list-objects-v2 --bucket "$BUCKET" --prefix "$RESULT_PREFIX" \
+        --query "Contents[?LastModified>='$(date -u -d @"$START_EPOCH" '+%Y-%m-%dT%H:%M:%S' 2>/dev/null || \
+        date -u -r "$START_EPOCH" '+%Y-%m-%dT%H:%M:%S')'] | [?ends_with(Key, '.json')] | [0].Key" \
+        --output text 2>/dev/null || true)"
+    if [[ -n "$CANDIDATE" && "$CANDIDATE" != "None" ]]; then
+        RESULT_KEY="$CANDIDATE"
+        echo ">>> Resultado disponible tras $i min: $RESULT_KEY"
         aws s3 cp "s3://$BUCKET/$RESULT_KEY" - 2>/dev/null
         break
     fi

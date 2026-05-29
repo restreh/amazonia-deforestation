@@ -33,7 +33,10 @@ aws ecr get-login-password --region "$AWS_REGION" \
     | docker login --username AWS --password-stdin "$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
 
 echo ">>> Construyendo imagen Docker"
-docker build --platform linux/amd64 -t "$ECR_REPO:$IMAGE_TAG" "$BUILD_DIR"
+# Lambda requiere manifest Docker v2; desactivamos provenance y SBOM que generan
+# atestaciones OCI no soportadas por el runtime de Lambda.
+docker build --platform linux/amd64 --provenance=false --sbom=false \
+    -t "$ECR_REPO:$IMAGE_TAG" "$BUILD_DIR"
 
 IMAGE_URI="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:$IMAGE_TAG"
 docker tag "$ECR_REPO:$IMAGE_TAG" "$IMAGE_URI"
@@ -59,11 +62,11 @@ if aws lambda get-function --function-name "$LAMBDA_NAME" --region "$AWS_REGION"
         --image-uri "$IMAGE_URI" --region "$AWS_REGION" --publish >/dev/null
     aws lambda wait function-updated --function-name "$LAMBDA_NAME" --region "$AWS_REGION"
     aws lambda update-function-configuration --function-name "$LAMBDA_NAME" \
-        --memory-size 4096 --timeout 300 --region "$AWS_REGION" >/dev/null
+        --memory-size 3008 --timeout 300 --region "$AWS_REGION" >/dev/null
 else
     aws lambda create-function --function-name "$LAMBDA_NAME" \
         --package-type Image --code "ImageUri=$IMAGE_URI" \
-        --role "$ROLE_ARN" --memory-size 4096 --timeout 300 \
+        --role "$ROLE_ARN" --memory-size 3008 --timeout 300 \
         --region "$AWS_REGION" >/dev/null
 fi
 

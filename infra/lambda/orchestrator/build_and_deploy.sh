@@ -25,6 +25,11 @@ trap 'rm -rf "$BUILD_DIR"' EXIT
 echo ">>> Empaquetando handler"
 cp "$REPO_ROOT/infra/lambda/orchestrator/handler.py" "$BUILD_DIR/"
 (cd "$BUILD_DIR" && zip -q -r function.zip handler.py)
+# AWS CLI en Windows + Git Bash no entiende /c/Users/...; convertir si es posible.
+ZIP_WIN_PATH="$BUILD_DIR/function.zip"
+if command -v cygpath >/dev/null 2>&1; then
+    ZIP_WIN_PATH="$(cygpath -w "$BUILD_DIR/function.zip")"
+fi
 
 echo ">>> Asegurando rol IAM para el orquestador"
 TRUST='{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"lambda.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
@@ -52,7 +57,7 @@ echo ">>> Creando o actualizando Lambda $LAMBDA_NAME"
 ENV_VARS="Variables={PROJECT_BUCKET=$BUCKET,INFERENCE_FUNCTION=$INFERENCE_FN,GRID_HEIGHT=3533,GRID_WIDTH=3556}"
 if aws lambda get-function --function-name "$LAMBDA_NAME" --region "$AWS_REGION" >/dev/null 2>&1; then
     aws lambda update-function-code --function-name "$LAMBDA_NAME" \
-        --zip-file "fileb://$BUILD_DIR/function.zip" --region "$AWS_REGION" --publish >/dev/null
+        --zip-file "fileb://$ZIP_WIN_PATH" --region "$AWS_REGION" --publish >/dev/null
     aws lambda wait function-updated --function-name "$LAMBDA_NAME" --region "$AWS_REGION"
     aws lambda update-function-configuration --function-name "$LAMBDA_NAME" \
         --runtime python3.12 --handler handler.lambda_handler \
@@ -63,7 +68,7 @@ else
         --runtime python3.12 --handler handler.lambda_handler \
         --role "$ROLE_ARN" --memory-size 512 --timeout 60 \
         --environment "$ENV_VARS" \
-        --zip-file "fileb://$BUILD_DIR/function.zip" --region "$AWS_REGION" >/dev/null
+        --zip-file "fileb://$ZIP_WIN_PATH" --region "$AWS_REGION" >/dev/null
 fi
 
 LAMBDA_ARN="arn:aws:lambda:$AWS_REGION:$ACCOUNT_ID:function:$LAMBDA_NAME"
