@@ -105,15 +105,28 @@ python scripts/mcnemar.py --models xgboost unet ensemble random_forest
 python scripts/bootstrap_spatial.py --models xgboost unet ensemble random_forest
 python scripts/concordance_lin.py --models xgboost unet ensemble random_forest
 python scripts/compare_cv.py --models xgboost random_forest
+
+# 9. Big Data en AWS (S3, Athena, Lambda, EC2)
+python scripts/upload_to_s3.py                    # rasters, parquet, modelos, métricas
+python scripts/build_metrics_by_block.py          # tabla analítica por bloque
+python scripts/upload_to_s3.py --only metrics_by_block
+python scripts/setup_athena.py                    # base Glue, tablas y queries demo
+bash infra/lambda/inference/build_and_deploy.sh   # contenedor U-Net en Lambda
+bash infra/lambda/inference/test_invoke.sh        # invocación sobre una ventana
+bash infra/ec2/run_benchmark.sh                   # benchmark t3.medium (criterio < 10 min)
 ```
 
 ## Infraestructura AWS
 
 Cómputo dentro del AWS Free Tier vigente desde julio de 2025 (200 USD de crédito
 durante seis meses) en la región `us-west-2`. Almacenamiento de derivados en S3
-(Parquet particionado por tile MGRS, trimestre y bloque), consulta con Athena,
-orquestación e inferencia en Lambda. La política IAM se encuentra en
-`infra/iam/DeforestationProjectAccess.json`.
+con particionamiento Hive por tile MGRS, trimestre y agregación. Tabla analítica
+`metrics_by_block` en Apache Parquet, consultable desde Athena vía Glue. Inferencia
+servida en un contenedor Lambda con PyTorch CPU. Benchmark del criterio de éxito
+sobre EC2 `t3.medium`. La política IAM del grupo `data-science-team` se encuentra
+en `infra/iam/DeforestationProjectAccess.json` y los scripts de despliegue en
+`infra/lambda/inference/` y `infra/ec2/`. Detalles, flujo extremo a extremo, costos
+y limpieza en `infra/README.md`.
 
 ## Licencia
 

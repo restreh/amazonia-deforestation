@@ -1,0 +1,9 @@
+# Dependencias del handler Lambda. Versiones fijas para reproducibilidad.
+# Torch CPU (la version GPU requiere drivers que no hay en Lambda).
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.4.1+cpu
+segmentation-models-pytorch==0.3.4
+numpy==1.26.4
+rasterio==1.4.3
+pyyaml==6.0.2
+boto3==1.35.50
