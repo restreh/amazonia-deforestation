@@ -21,6 +21,9 @@ infra/
 │   ├── requirements.txt
 │   ├── build_and_deploy.sh                Build, ECR push, create/update Lambda function
 │   └── test_invoke.sh                     Invocación de prueba sobre una ventana 256×256
+├── lambda/orchestrator/
+│   ├── handler.py                         Recorre la grilla del AOI y dispara la inferencia
+│   └── build_and_deploy.sh                Empaquetado ZIP, deploy y regla EventBridge trimestral
 └── ec2/
     ├── run_benchmark.sh                   Lanza una t3.medium, mide y termina la instancia
     └── user_data.sh                       Bootstrap que corre en la instancia
@@ -81,7 +84,10 @@ bash infra/lambda/inference/build_and_deploy.sh
 # 5. Invocación de prueba sobre una ventana 256×256
 bash infra/lambda/inference/test_invoke.sh
 
-# 6. Benchmark del criterio de éxito sobre EC2 t3.medium
+# 6. Lambda de orquestación + regla EventBridge trimestral
+bash infra/lambda/orchestrator/build_and_deploy.sh
+
+# 7. Benchmark del criterio de éxito sobre EC2 t3.medium
 bash infra/ec2/run_benchmark.sh
 ```
 
@@ -104,7 +110,12 @@ Free Tier vigente.
 Para liberar todos los recursos creados (útil al cerrar el ciclo académico):
 
 ```bash
-# Lambda y ECR
+# Regla EventBridge + permiso del orquestador
+aws events remove-targets --rule amazonia-deforestation-quarterly --ids 1 --region us-west-2
+aws events delete-rule --name amazonia-deforestation-quarterly --region us-west-2
+
+# Lambdas y ECR
+aws lambda delete-function --function-name amazonia-deforestation-orchestrator --region us-west-2
 aws lambda delete-function --function-name amazonia-deforestation-unet-inference --region us-west-2
 aws ecr delete-repository --repository-name amazonia-deforestation-inference --force --region us-west-2
 
@@ -116,6 +127,7 @@ aws s3 rm s3://amazonia-deforestation-data-363918845645/ --recursive
 
 # Roles IAM creados por los scripts
 aws iam delete-role --role-name amazonia-deforestation-lambda-role
+aws iam delete-role --role-name amazonia-deforestation-orchestrator-role
 aws iam delete-role --role-name amazonia-deforestation-ec2-benchmark
 aws iam delete-instance-profile --instance-profile-name amazonia-deforestation-ec2-benchmark
 ```

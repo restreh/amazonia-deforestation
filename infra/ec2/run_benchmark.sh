@@ -49,11 +49,14 @@ EXTRA_ARGS=()
 if [[ -n "$KEY_NAME" ]]; then
     EXTRA_ARGS+=(--key-name "$KEY_NAME")
 fi
+# Leemos el script y lo pasamos como string para evitar el problema de file:// con
+# rutas Git Bash en Windows. AWS CLI hace el base64-encode automaticamente.
+USER_DATA_CONTENT="$(cat "$USER_DATA")"
 INSTANCE_ID="$(aws ec2 run-instances --region "$AWS_REGION" \
     --image-id "$AMI_ID" --instance-type "$INSTANCE_TYPE" --count 1 \
     --iam-instance-profile "Name=$PROFILE_NAME" \
     --instance-initiated-shutdown-behavior terminate \
-    --user-data "file://$USER_DATA" \
+    --user-data "$USER_DATA_CONTENT" \
     --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=amazonia-benchmark-$TIMESTAMP},{Key=Project,Value=amazonia-deforestation}]" \
     "${EXTRA_ARGS[@]}" \
     --query 'Instances[0].InstanceId' --output text)"
