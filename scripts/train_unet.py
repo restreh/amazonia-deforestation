@@ -39,7 +39,7 @@ from amazonia_deforestation.models.unet import (  # noqa: E402
 def load_stats(stats_path, expected_n, expected_validity):
     """Carga channel_stats.json y devuelve (means, stds) como numpy float32.
 
-    Verifica que el numero de canales y el flag de validez coincidan con la corrida
+    Verifica que el numero de canales y el flag de validez coincidan con la ejecucion
     actual. Falla con mensaje claro si no.
     """
     if not stats_path.exists():

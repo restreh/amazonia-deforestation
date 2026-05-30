@@ -7,7 +7,7 @@ Uso (desde la raiz del repositorio, tras predict.py y predict_unet.py):
 Para cada peso de XGBoost en la lista (el peso del U-Net se calcula como 1 - w_xgb),
 construye proba_ensemble.tif, lo evalua con evaluate_baseline.py y guarda el reporte
 en data/interim/eval_ensemble_wXX.json. Imprime una tabla resumen con las metricas
-clave para decidir el peso optimo. La ultima corrida deja proba_ensemble.tif con la
+clave para decidir el peso optimo. La ultima ejecucion deja proba_ensemble.tif con la
 combinacion que maximiza F1_val.
 
 Dependencias: rasterio, numpy, pyyaml, scikit-learn (las usan los scripts invocados).

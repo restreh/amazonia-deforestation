@@ -5,7 +5,7 @@ Detección de deforestación a nivel de píxel sobre el arco amazónico colombia
 automático supervisado, con Hansen Global Forest Change como referencia de
 entrenamiento y evaluación.
 
-Proyecto Integrado 1 — Maestría en Ciencia de Datos y Analítica. Articula tres
+Proyecto Integrador 1 — Maestría en Ciencia de Datos y Analítica. Articula tres
 materias: Aprendizaje Automático (modelos y evaluación), Almacenamiento y
 Procesamiento de Grandes Datos (arquitectura e ingeniería de datos en AWS) y
 Visualización de Datos (tablero Streamlit).
