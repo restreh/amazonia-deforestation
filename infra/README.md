@@ -4,7 +4,7 @@ Capa de AWS del proyecto `amazonia-deforestation`. Articula el almacenamiento en
 las consultas analíticas en Athena (sobre Glue), la inferencia en Lambda con un
 contenedor PyTorch y el benchmark del criterio de éxito de tiempo de inferencia
 sobre una instancia EC2 `t3.medium`. Todo opera en `us-west-2` para evitar
-costos de transferencia entre regiones (los buckets públicos de Sentinel-2 viven
+costos de transferencia entre regiones (los buckets públicos de Sentinel-2 se encuentran
 ahí).
 
 ## Componentes
@@ -120,7 +120,7 @@ Free Tier vigente.
 
 ## Limpieza
 
-Para liberar todos los recursos creados (útil al cerrar el ciclo académico):
+Para liberar todos los recursos creados:
 
 ```bash
 # Regla EventBridge + permiso del orquestador
