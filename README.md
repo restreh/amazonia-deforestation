@@ -10,6 +10,8 @@ materias: Aprendizaje Automático (modelos y evaluación), Almacenamiento y
 Procesamiento de Grandes Datos (arquitectura e ingeniería de datos en AWS) y
 Visualización de Datos (tablero Streamlit).
 
+**Tablero público**: https://amazonia-deforestation.streamlit.app/
+
 ## Problema
 
 El SMByC-IDEAM reporta alertas de deforestación con periodicidad trimestral. La
@@ -48,8 +50,8 @@ amazonia-deforestation/
 │   ├── spatial/     I de Moran, semivariograma, partición por bloques
 │   ├── models/      Random Forest, XGBoost, U-Net, dataset de patches
 │   └── evaluation/  Métricas pixel y polígono, calibración de umbral
-├── infra/         Infraestructura como código (IAM, S3, Lambda)
-└── dashboards/    Tablero Streamlit
+├── infra/         Infraestructura AWS (IAM, S3, Athena, Lambda, EC2)
+└── dashboards/    Tablero Streamlit (entrypoint y páginas)
 ```
 
 ## Datos
@@ -58,9 +60,9 @@ amazonia-deforestation/
   Política de datos libres de Copernicus.
 - **Hansen Global Forest Change v1.12** (Universidad de Maryland, GLAD).
   Licencia Creative Commons Attribution 4.0.
-- **Contexto**: límites administrativos del IGAC y áreas protegidas (RUNAP).
+- **Contexto**: límites administrativos del IGAC.
 
-## Reproducción
+## Reproducción del pipeline completo
 
 ```bash
 # 1. Entorno
@@ -73,9 +75,11 @@ pip install -r requirements.txt
 # 3. Credenciales AWS (lectura de datos abiertos y escritura en el bucket del proyecto)
 aws configure   # región us-west-2
 
-# 4. Pipeline de ingestión y preparación (desde la raíz del repositorio)
+# 4. Ingestión y preparación
 python scripts/refine_aoi.py             # AOI a límites municipales
 python scripts/select_aoi.py             # ventana de ~5.000 km² sobre el núcleo activo
+python scripts/check_availability.py     # escenas Sentinel-2 por trimestre
+python scripts/download_labels.py        # capas Hansen GFC para el bbox
 python scripts/build_composites.py       # composiciones trimestrales Sentinel-2
 python scripts/build_indices.py          # NDVI, NBR, NDWI
 python scripts/align_label.py            # etiqueta Hansen a la grilla de 20 m
@@ -84,36 +88,91 @@ python scripts/build_split.py            # partición espacial por bloques
 python scripts/build_training_sample.py  # muestreo balanceado de píxeles
 python scripts/build_features.py         # tabla de 612 atributos por píxel
 
-# 5. Modelado y predicción de baselines (CPU)
+# 5. Baselines (CPU)
 python scripts/train_baselines.py        # Random Forest y XGBoost, CV espacial
 python scripts/predict.py                # predicción densa por píxel sobre val/test
-python scripts/evaluate_baseline.py      # métricas píxel y polígono
+python scripts/predict.py --model random_forest
+python scripts/evaluate_baseline.py
+python scripts/evaluate_baseline.py --model random_forest
 
-# 6. Modelado y predicción del U-Net (GPU)
+# 6. U-Net (GPU; se corre en máquina aparte)
 python scripts/compute_channel_stats.py  # media y desviación por canal sobre train
 python scripts/train_unet.py
 python scripts/predict_unet.py
 python scripts/evaluate_baseline.py --model unet
 
-# 7. Ensamble por promedio ponderado XGBoost + U-Net (CPU)
-python scripts/build_ensemble.py         # 0.5/0.5 por defecto
-python scripts/sweep_ensemble.py         # barrido de pesos y selección por F1_val
+# 7. Ensamble (CPU)
+python scripts/build_ensemble.py
+python scripts/sweep_ensemble.py --weights 0.3 0.4 0.5 0.6 0.7
 python scripts/evaluate_baseline.py --model ensemble
 
-# 8. Comparación estadística entre modelos (CPU)
+# 8. Comparación estadística (CPU)
 python scripts/mcnemar.py --models xgboost unet ensemble random_forest
 python scripts/bootstrap_spatial.py --models xgboost unet ensemble random_forest
 python scripts/concordance_lin.py --models xgboost unet ensemble random_forest
 python scripts/compare_cv.py --models xgboost random_forest
 
-# 9. Big Data en AWS (S3, Athena, Lambda, EC2)
-python scripts/upload_to_s3.py                    # rasters, parquet, modelos, métricas
-python scripts/build_metrics_by_block.py          # tabla analítica por bloque
+# 9. Big Data en AWS (S3 + Glue/Athena + Lambda + EC2)
+python scripts/upload_to_s3.py                              # ~5,4 GB con partición Hive
+python scripts/build_metrics_by_block.py
 python scripts/upload_to_s3.py --only metrics_by_block
-python scripts/setup_athena.py                    # base Glue, tablas y queries demo
-bash infra/lambda/inference/build_and_deploy.sh   # contenedor U-Net en Lambda
-bash infra/lambda/inference/test_invoke.sh        # invocación sobre una ventana
-bash infra/ec2/run_benchmark.sh                   # benchmark t3.medium (criterio < 10 min)
+python scripts/build_features_by_block.py
+python scripts/upload_to_s3.py --only features_by_block
+python scripts/setup_athena.py                              # base Glue, tablas, consultas demo
+bash infra/lambda/inference/build_and_deploy.sh             # contenedor U-Net en Lambda
+bash infra/lambda/inference/test_invoke.sh
+bash infra/lambda/orchestrator/build_and_deploy.sh          # orquestador + cron trimestral
+bash infra/ec2/run_benchmark.sh                             # benchmark t3.medium
+
+# 10. Tablero
+streamlit run dashboards/streamlit/streamlit_app.py         # modo local
+```
+
+## Tablero Streamlit
+
+El tablero tiene seis páginas: resumen ejecutivo, contexto y datos, diagnóstico
+espacial, modelos y métricas (con bootstrap espacial, McNemar y CCC),
+mapa de predicciones con capas conmutables, análisis por municipio y
+despliegue Big Data.
+
+Soporta dos fuentes de datos según la variable de entorno
+`AMAZONIA_DATA_SOURCE`.
+
+| Valor | Fuente | Caso de uso |
+|---|---|---|
+| `local` (por defecto) | `data/...` en el repo | Desarrollo y revisión con artefactos en mano |
+| `s3` | `s3://amazonia-deforestation-data-363918845645/...` anónimo | Streamlit Cloud y cualquier despliegue sin AWS configurado |
+
+Los prefijos `derived/`, `models/` y `metrics/` del bucket son lectura pública;
+el resto queda privado.
+
+### Despliegue en Streamlit Community Cloud
+
+1. Cuenta en https://share.streamlit.io con un GitHub que tenga acceso al repo.
+2. `Create app` → `Use existing repo`.
+   - Repository: `restreh/amazonia-deforestation`.
+   - Branch: `main`.
+   - Main file path: `dashboards/streamlit/streamlit_app.py`.
+3. `Advanced settings`.
+   - Python version: `3.12`.
+   - Python dependencies file: `dashboards/streamlit/requirements.txt`.
+   - Secrets.
+     ```toml
+     AMAZONIA_DATA_SOURCE = "s3"
+     AWS_REGION = "us-west-2"
+     AWS_NO_SIGN_REQUEST = "YES"
+     ```
+4. `Deploy`. La primera build tarda 5-8 minutos por `rasterio` y `geopandas`.
+
+Costo: Streamlit Community es gratis (1 GB RAM, dormida tras 7 días de
+inactividad). El egress de S3 hacia GCP cuesta 0,09 USD/GB; una sesión completa
+del tablero transfiere ~0,3 GB.
+
+### Correr el tablero localmente apuntando a S3
+
+```bash
+AMAZONIA_DATA_SOURCE=s3 AWS_NO_SIGN_REQUEST=YES AWS_REGION=us-west-2 \
+  streamlit run dashboards/streamlit/streamlit_app.py
 ```
 
 ## Infraestructura AWS
@@ -121,12 +180,14 @@ bash infra/ec2/run_benchmark.sh                   # benchmark t3.medium (criteri
 Cómputo dentro del AWS Free Tier vigente desde julio de 2025 (200 USD de crédito
 durante seis meses) en la región `us-west-2`. Almacenamiento de derivados en S3
 con particionamiento Hive por tile MGRS, trimestre y agregación. Tabla analítica
-`metrics_by_block` en Apache Parquet, consultable desde Athena vía Glue. Inferencia
-servida en un contenedor Lambda con PyTorch CPU. Benchmark del criterio de éxito
-sobre EC2 `t3.medium`. La política IAM del grupo `data-science-team` se encuentra
-en `infra/iam/DeforestationProjectAccess.json` y los scripts de despliegue en
-`infra/lambda/inference/` y `infra/ec2/`. Detalles, flujo extremo a extremo, costos
-y limpieza en `infra/README.md`.
+`metrics_by_block` en Apache Parquet, consultable desde Athena vía Glue.
+Inferencia servida en un contenedor Lambda con PyTorch CPU y orquestación
+trimestral con EventBridge. Benchmark del criterio de éxito sobre EC2
+`t3.medium`. La política IAM del grupo `data-science-team` está en
+`infra/iam/DeforestationProjectAccess.json`, la política de bucket público para
+los prefijos del tablero está en `infra/s3/public_read_policy.json` y los
+scripts de despliegue en `infra/lambda/{inference,orchestrator}/` y `infra/ec2/`.
+Flujo extremo a extremo, costos y procedimiento de limpieza en `infra/README.md`.
 
 ## Licencia
 

@@ -13,7 +13,9 @@ ahí).
 infra/
 ├── iam/
 │   └── DeforestationProjectAccess.json    Política de proyecto, adjunta al grupo data-science-team
-├── s3/                                    Estructura del bucket (placeholder)
+├── s3/
+│   └── public_read_policy.json            Política aplicada al bucket: lectura pública
+│                                          de derived/, models/, metrics/ para el tablero
 ├── athena/                                SQL de las consultas demo (lo crea setup_athena.py)
 ├── lambda/inference/
 │   ├── Dockerfile                         Imagen Lambda con PyTorch CPU
@@ -53,7 +55,7 @@ s3://amazonia-deforestation-data-363918845645/
 │   ├── indices/tile=AOI_caqueta/quarter=2024Q{1-4}/indices.tif
 │   ├── interim/{label_2024_20m,split_blocks}.tif, channel_stats.json
 │   ├── features/train_features.parquet, train_sample.parquet
-│   ├── features_by_block/block_id=*/...                  # opcional, vía CTAS en Athena
+│   ├── features_by_block/block_id=*/part.parquet         # tabla particionada para Athena
 │   ├── metrics_by_block/part.parquet                     # tabla analítica para Athena
 │   └── predictions/model={xgboost,random_forest,unet,ensemble,unet_imagenet}/proba.tif
 ├── models/{xgboost.json, random_forest.joblib, unet.pt, unet_imagenet.pt}
@@ -69,14 +71,14 @@ s3://amazonia-deforestation-data-363918845645/
 # 1. Subida de derivados a S3
 python scripts/upload_to_s3.py
 
-# 2. Agregar la tabla analítica por bloque y reenviar
+# 2. Agregar las tablas analíticas y reenviar
 python scripts/build_metrics_by_block.py
 python scripts/upload_to_s3.py --only metrics_by_block
+python scripts/build_features_by_block.py
+python scripts/upload_to_s3.py --only features_by_block
 
-# 3. Crear base Glue, tablas Athena y correr las consultas demo
+# 3. Crear base Glue, registrar tablas y correr las consultas demo
 python scripts/setup_athena.py
-#    Opcional: particionar features por bloque con CTAS dentro de Athena
-python scripts/setup_athena.py --ctas-features-by-block
 
 # 4. Construir e implementar el Lambda de inferencia
 bash infra/lambda/inference/build_and_deploy.sh
@@ -89,7 +91,18 @@ bash infra/lambda/orchestrator/build_and_deploy.sh
 
 # 7. Benchmark del criterio de éxito sobre EC2 t3.medium
 bash infra/ec2/run_benchmark.sh
+
+# 8. Política de lectura pública para el tablero
+aws s3api put-public-access-block --bucket amazonia-deforestation-data-363918845645 \
+    --public-access-block-configuration \
+    'BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=false,RestrictPublicBuckets=false'
+aws s3api put-bucket-policy --bucket amazonia-deforestation-data-363918845645 \
+    --policy file://infra/s3/public_read_policy.json
 ```
+
+La política deja `derived/`, `models/` y `metrics/` como lectura anónima para que
+el tablero pueda apuntar al bucket sin credenciales (ver sección "Tablero
+Streamlit" en el README principal). El resto del bucket queda privado.
 
 ## Costos
 
