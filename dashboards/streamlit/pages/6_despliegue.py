@@ -21,11 +21,11 @@ aplicar_estilos_streamlit()
 
 st.title("Despliegue Big Data")
 lead(
-    "El bloque de Big Data lleva el modelo del notebook a la nube. Los "
-    "derivados viven en S3 con particionamiento Hive, Athena consulta la "
-    "tabla analítica `metrics_by_block` con pruning de particiones, la "
-    "inferencia se sirve en un contenedor Lambda con PyTorch y un orquestador "
-    "EventBridge dispara el flujo cada trimestre."
+    "El bloque de Big Data despliega el modelo entrenado en la nube. Los "
+    "derivados se almacenan en S3 con particionamiento Hive, Athena "
+    "consulta la tabla analítica `metrics_by_block` con partition pruning, "
+    "la inferencia se sirve en un contenedor Lambda con PyTorch y un "
+    "orquestador EventBridge dispara el flujo cada trimestre."
 )
 
 # ── 1. Arquitectura ─────────────────────────────────────────────────────────
@@ -134,11 +134,12 @@ c3.metric("Criterio de la propuesta", "< 10 min",
           delta_color="inverse")
 
 takeaway(
-    "La medición sobre `t3.medium` sincrónico (2 vCPUs) está por encima "
-    "del criterio. El criterio fue establecido sin medición previa y "
-    "sobreestimó el rendimiento del nodo para una U-Net ResNet-34. La "
-    "arquitectura distribuida del proyecto compensa este límite operativo, "
-    "como se ve abajo."
+    "La medición sobre `t3.medium` sincrónico (2 vCPUs) da 19,52 min sobre "
+    "el AOI y ~47 min extrapolados a una escena Sentinel-2 completa. El "
+    "criterio < 10 min de la propuesta fue establecido sin medición previa "
+    "y sobreestimó el rendimiento del nodo para una U-Net ResNet-34. La "
+    "arquitectura desplegada (orquestador + Lambda por ventana) opera bajo "
+    "una configuración distinta a la del criterio original."
 )
 
 st.divider()
@@ -183,8 +184,8 @@ st.divider()
 st.subheader("Verificación en vivo contra Athena (opcional)")
 
 st.markdown(
-    "Si tienes credenciales AWS configuradas con permisos sobre la cuenta "
-    "del proyecto (`363918845645`), puedes correr una consulta contra "
+    "Con credenciales AWS configuradas y permisos sobre la cuenta del "
+    "proyecto (`363918845645`), se puede ejecutar una consulta contra "
     "Athena en vivo para verificar que la integración sigue activa."
 )
 

@@ -25,9 +25,9 @@ aplicar_estilos_streamlit()
 st.title("Análisis por municipio")
 lead(
     "Agregación por municipio de las hectáreas detectadas contra las "
-    "reportadas por Hansen GFC 2024. Permite comparar la calibración total "
-    "de cada modelo y elegir el más fiable cuando lo que importa es el "
-    "número agregado, no la posición píxel a píxel."
+    "reportadas por Hansen GFC 2024. Útil cuando la pregunta operativa "
+    "es el total agregado por unidad administrativa, antes que la posición "
+    "píxel a píxel del polígono."
 )
 
 # ── Selectores ──────────────────────────────────────────────────────────────
@@ -189,13 +189,19 @@ c3.metric("CCC de Lin por bloque",
 razon = ccc_modelo.get("total_predicted_ha_aoi", 0) / ccc_modelo.get(
     "total_truth_ha_aoi", 1) if ccc_modelo else None
 
+if razon is None:
+    cuerpo = "no hay reporte CCC disponible para este modelo"
+else:
+    if abs(razon - 1) < 0.05:
+        descriptor = "calibración cercana a 1"
+    else:
+        sentido = "sobreestimación" if razon > 1 else "subestimación"
+        descriptor = f"{sentido} de {abs(razon - 1) * 100:.1f} %"
+    cuerpo = (f"la razón predicho/Hansen del modelo seleccionado es "
+              f"<strong>{razon:.3f}</strong> ({descriptor})")
+
 takeaway(
-    f"Para totales agregados, la razón predicho/Hansen del modelo "
-    f"seleccionado es <strong>{razon:.3f}</strong>" + (
-        " (casi perfecta calibración)" if razon and abs(razon - 1) < 0.05
-        else f" ({'sobreestimación' if razon and razon > 1 else 'subestimación'} "
-             f"de {abs(razon - 1) * 100:.1f} %)" if razon else ""
-    ) + ". Para alertas accionables municipio a municipio, el ensamble suele "
-        "ser el mejor balance entre cobertura y precisión; para reportes "
-        "agregados, el U-Net está más cerca del total Hansen."
+    f"Para totales agregados, {cuerpo}. Para reporte agregado a Hansen, el "
+    "U-Net es el modelo con menor desviación; para alertas a nivel de "
+    "polígono, el ensamble obtiene el mejor F1."
 )

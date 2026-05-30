@@ -20,9 +20,10 @@ aplicar_estilos_streamlit()
 st.title("Contexto y datos")
 lead(
     "El proyecto se ubica en el arco amazónico colombiano, en dos municipios "
-    "del Caquetá: Cartagena del Chairá y San Vicente del Caguán. Aquí se "
-    "concentra una fracción importante de la deforestación nacional de los "
-    "últimos años. Esta página enmarca el problema y caracteriza los datos."
+    "del Caquetá (Cartagena del Chairá y San Vicente del Caguán). El "
+    "departamento del Caquetá encabezó el incremento trimestral de pérdida en "
+    "el último Boletín del IDEAM. Esta página enmarca el problema y "
+    "caracteriza los datos."
 )
 
 cfg = load_config()
@@ -106,8 +107,8 @@ if warn_if_missing("disponibilidad"):
     st.caption(
         "La nubosidad sigue la estacionalidad amazónica: el tercer trimestre "
         "(jul–sep) es el más despejado y el segundo (abr–jun) el más nublado. "
-        "Por eso las composiciones trimestrales por mediana y percentil 25 "
-        "son críticas para tener observaciones útiles año redondo."
+        "Las composiciones trimestrales por mediana y percentil 25 permiten "
+        "tener observaciones utilizables durante todo el año."
     )
 
 st.divider()
@@ -137,10 +138,10 @@ if warn_if_missing("etiqueta") and warn_if_missing("split"):
 
     takeaway(
         f"Solo {fmt_pct(stats['prevalencia'])} de los píxeles del AOI corresponden a la "
-        "clase positiva. Este <strong>desbalance severo</strong> es el primer "
-        "constraint del modelado: motiva pérdida focal (Lin et al. 2017), "
-        "muestreo balanceado para entrenamiento y umbral calibrado en validación "
-        "a prevalencia real (no a 0.5)."
+        "clase positiva. Este <strong>desbalance severo</strong> condiciona "
+        "tres decisiones del modelado: pérdida focal (Lin et al., 2017), "
+        "muestreo balanceado durante el entrenamiento y umbral calibrado en "
+        "validación a la prevalencia real, en lugar del umbral 0,5 por defecto."
     )
 
 st.divider()

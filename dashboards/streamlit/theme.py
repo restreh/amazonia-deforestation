@@ -1,9 +1,31 @@
 """Sistema de diseno del tablero: paleta de colores y tema plotly.
 
-Inspiracion: Tufte (alto data-ink ratio, sin chart junk), accesibilidad para
-daltonismo (no usar rojo y verde a la vez con el mismo significado), y
-asignacion semantica fija para que el mismo concepto siempre tenga el mismo
-color en todas las paginas.
+Decisiones de diseno y referencias:
+
+  - Alto cociente dato/tinta y supresion de elementos no informativos
+    (gridlines pesadas, fondos, ejes redundantes). Tufte (2001).
+  - Asignacion semantica fija de color: cada concepto (perdida, preservacion,
+    referencia institucional, prediccion) y cada modelo conserva su color en
+    todas las paginas, para que el lector aprenda el codigo una sola vez.
+    Few (2006) y Cairo (2016).
+  - Codificacion visual jerarquizada por precision perceptual: posicion y
+    longitud para magnitudes; color y forma solo para categorias.
+    Cleveland & McGill (1984).
+  - Accesibilidad para daltonismo: la combinacion rojo-verde no es el unico
+    canal informativo; metricas criticas se acompanan de iconos y deltas
+    explicitos.
+  - Narrativa guiada por pagina: lead introductorio, metricas principales,
+    visualizacion principal y un mensaje destacado (`takeaway`) que sintetiza
+    una sola idea por seccion. Knaflic (2015).
+
+Referencias:
+  Cairo, A. (2016). The truthful art. New Riders.
+  Cleveland, W. S., & McGill, R. (1984). Graphical perception. Journal of the
+    American Statistical Association, 79(387), 531-554.
+  Few, S. (2006). Information dashboard design. O'Reilly.
+  Knaflic, C. N. (2015). Storytelling with data. Wiley.
+  Tufte, E. R. (2001). The visual display of quantitative information
+    (2.a ed.). Graphics Press.
 """
 
 from __future__ import annotations

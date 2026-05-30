@@ -37,7 +37,7 @@ disponibles = [m for m in MODELOS_CANDIDATOS + [MODELO_CONTROL]
                if existe("proba_" + m)]
 
 if not disponibles:
-    st.warning("No hay rasters de probabilidad. Corre `predict.py` y/o "
+    st.warning("No hay rasters de probabilidad. Ejecuta `predict.py` y/o "
                "`predict_unet.py` y `build_ensemble.py`.")
     st.stop()
 
@@ -176,10 +176,10 @@ if conteos:
 
     takeaway(
         f"Subir τ por encima de <strong>{umbral_calibrado:.2f}</strong> reduce los "
-        "FP (falsas alarmas) y aumenta los FN (alertas que dejas pasar). "
-        "Bajar τ es lo opuesto. El equilibrio operativo depende del costo "
-        "relativo de un equipo de campo enviado en balde vs el costo de no "
-        "detectar pérdida activa."
+        "FP (falsas alarmas) y aumenta los FN (alertas omitidas). Bajar τ "
+        "tiene el efecto inverso. El umbral operativo depende del costo "
+        "relativo entre una visita de campo en vano y dejar pasar una "
+        "alerta verdadera."
     )
 else:
     c1, c2 = st.columns(2)

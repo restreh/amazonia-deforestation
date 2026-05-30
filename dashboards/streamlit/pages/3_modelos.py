@@ -23,10 +23,10 @@ aplicar_estilos_streamlit()
 
 st.title("Modelos y métricas")
 lead(
-    "Cuatro modelos candidatos y un experimento de control. La elección del "
-    "modelo final se hace contra evidencia estadística pareada (McNemar) y "
-    "contra intervalos de confianza con bootstrap espacial por bloques "
-    "(B = 1.000) que respeta la autocorrelación, no contra puntos individuales."
+    "Cuatro modelos candidatos y un experimento de control. La comparación "
+    "se hace con evidencia estadística pareada (McNemar a nivel de píxel) e "
+    "intervalos de confianza al 95 % producidos por bootstrap espacial por "
+    "bloques (B = 1.000), que respeta la autocorrelación de los datos."
 )
 
 cfg = load_config()
@@ -43,7 +43,7 @@ def evaluacion(modelo_id: str) -> dict | None:
 modelos = [(m, evaluacion(m)) for m in MODELOS_CANDIDATOS + [MODELO_CONTROL]]
 modelos = [(m, ev) for m, ev in modelos if ev]
 if not modelos:
-    st.warning("No hay reportes de evaluación. Corre `evaluate_baseline.py` "
+    st.warning("No hay reportes de evaluación. Ejecuta `evaluate_baseline.py` "
                "para cada modelo.")
     st.stop()
 
@@ -123,10 +123,10 @@ for col, (mid, ev) in zip(cols, modelos):
 
 takeaway(
     "El criterio <strong>IoU polígono ≥ 0,40</strong> lo cumplen los cuatro candidatos. "
-    "El criterio <strong>F1 píxel ≥ 0,70</strong> no lo cumple ninguno y es coherente con la "
-    "literatura comparable para deforestación amazónica con etiqueta Hansen "
-    "(rango 0,45–0,65 en Adarme et al. 2022 y Maretto et al. 2020). Esta es "
-    "una observación metodológica documentada en el informe, no un fracaso."
+    "El criterio <strong>F1 píxel ≥ 0,70</strong> no lo cumple ninguno; el rango "
+    "alcanzado (0,497–0,567) es coherente con la literatura comparable "
+    "para deforestación amazónica con etiqueta Hansen, que reporta F1 píxel "
+    "entre 0,45 y 0,65 (Adarme et al., 2022; Maretto et al., 2021)."
 )
 
 st.divider()
@@ -156,8 +156,8 @@ st.subheader("Bootstrap espacial por bloques — IC 95 %")
 
 st.markdown(
     "Remuestreo de bloques de prueba con reposición, B = 1.000 iteraciones. "
-    "Los intervalos respetan la autocorrelación; el bootstrap píxel a píxel "
-    "los habría dado mucho más estrechos pero engañosamente."
+    "Los intervalos respetan la autocorrelación espacial. Un bootstrap "
+    "píxel a píxel habría producido intervalos artificialmente estrechos."
 )
 
 boot = read_json("bootstrap_spatial")
@@ -220,9 +220,10 @@ st.subheader("Prueba de McNemar pareada a nivel de píxel")
 
 st.markdown(
     "Compara aciertos pareados de cada par de modelos en el conjunto de "
-    "prueba. **Caveat metodológico**: con 1,86 M de píxeles la potencia "
-    "estadística es enorme y diferencias minúsculas de accuracy salen "
-    "significativas. Por eso el bootstrap espacial es el control de realidad."
+    "prueba. **Advertencia metodológica.** Con 1,86 M de píxeles la "
+    "potencia estadística es muy alta y diferencias de exactitud del orden "
+    "de 0,001 resultan significativas. La lectura honesta combina McNemar "
+    "con el bootstrap espacial por bloques."
 )
 
 mc = read_json("mcnemar")
@@ -291,9 +292,10 @@ if ccc:
         )
         takeaway(
             "El <strong>U-Net</strong> tiene el mayor CCC por bloque (0,945) y la razón "
-            "predicho/Hansen más cercana a 1 (0,979). El ensamble es muy "
-            "competitivo en F1 pero sobreestima ~6 %. Es un trade-off real "
-            "que vale la pena reportar."
+            "predicho/Hansen más cercana a 1 (0,979). El ensamble lidera en "
+            "F1 píxel y polígono pero sobreestima el total en ~6 %. La "
+            "elección depende de la métrica operativa: para reporte agregado "
+            "U-Net, para alertas el ensamble."
         )
 
 st.divider()

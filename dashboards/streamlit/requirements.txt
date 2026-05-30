@@ -1,4 +1,4 @@
-# Dependencias minimas para correr SOLO el tablero Streamlit.
+# Dependencias minimas para ejecutar SOLO el tablero Streamlit.
 # Streamlit Community Cloud apunta a este archivo via su setting de
 # "Advanced settings -> Python dependencies file".
 # El requirements.txt de la raiz queda intacto para el pipeline completo

@@ -40,25 +40,51 @@ moran = re.search(r"Moran I[^:]*:\s*([-\d.]+)", texto)
 rango = re.search(r"Rango[^:]*:\s*([\d.]+)", texto)
 bloque = re.search(r"Bloque[^:]*:\s*([\d.]+)", texto)
 
+
+def _fmt_moran(raw: str | None) -> str:
+    if raw is None:
+        return "—"
+    try:
+        return f"{float(raw):.2f}".replace(".", ",")
+    except ValueError:
+        return raw
+
+
+def _fmt_rango(raw: str | None) -> str:
+    if raw is None:
+        return "—"
+    try:
+        return f"{int(float(raw)):,} m".replace(",", ".")
+    except ValueError:
+        return raw + " m"
+
+
+def _fmt_bloque(raw: str | None) -> str:
+    if raw is None:
+        return "—"
+    return raw.replace(".", ",") + " km"
+
+
 c1, c2, c3 = st.columns(3)
 c1.metric("I de Moran (etiqueta)",
-          moran.group(1) if moran else "—",
-          help="Cercano a 1 → autocorrelación positiva fuerte. "
-               "El valor observado, 0.84, indica que un píxel deforestado "
+          _fmt_moran(moran.group(1) if moran else None),
+          help="Cercano a 1 indica autocorrelación positiva fuerte. "
+               "El valor observado, 0,84, indica que un píxel deforestado "
                "tiende a estar rodeado por otros deforestados.")
 c2.metric("Rango espacial",
-          f"{rango.group(1)} m" if rango else "—",
+          _fmt_rango(rango.group(1) if rango else None),
           help="Distancia a la que la correlación se vuelve despreciable. "
                "Es el insumo principal para dimensionar los bloques.")
 c3.metric("Lado del bloque de validación",
-          f"{bloque.group(1)} km" if bloque else "—",
+          _fmt_bloque(bloque.group(1) if bloque else None),
           help="Mayor que el rango espacial para que la distancia mínima "
                "entre entrenamiento y prueba sea suficiente.")
 
 takeaway(
-    "El I de Moran de 0.84 confirma autocorrelación positiva fuerte; el rango "
-    "del semivariograma (3.4 km) define un piso para el tamaño del bloque. "
-    "Por eso la partición es de <strong>5 km</strong>, no de 1 km ni aleatoria por píxel."
+    "El I de Moran de 0,84 confirma autocorrelación positiva fuerte; el rango "
+    "del semivariograma (3.400 m) define un piso para el tamaño del bloque. "
+    "La partición es de <strong>5 km</strong> por bloques completos asignados "
+    "a entrenamiento, validación o prueba."
 )
 
 st.divider()
@@ -146,20 +172,23 @@ if compare:
             )
             takeaway(
                 "El optimismo es máximo en <strong>AUC-PR</strong> "
-                "(+0.05 a +0.07) y en <strong>recall</strong> (+0.05 a +0.06). "
+                "(+0,048 en Random Forest, +0,066 en XGBoost) y en "
+                "<strong>recall</strong> (+0,045 y +0,062 respectivamente). "
                 "Reportar solo la validación aleatoria sobreestimaría el "
                 "desempeño esperado en zonas no observadas."
             )
 
 st.divider()
 
-with st.expander("¿Por qué este sesgo importa? — Roberts et al. 2017, Karasiak et al. 2022"):
+with st.expander("¿Por qué este sesgo importa? — Roberts et al. (2017), "
+                 "Karasiak et al. (2022)"):
     st.markdown(
         "El supuesto de independencia de la validación cruzada estándar se "
-        "viola cuando los datos tienen estructura espacial. Cualquier modelo "
-        "evaluado bajo esa contaminación rinde bien sobre conjuntos similares "
-        "a los de entrenamiento, pero su capacidad de generalización a zonas "
-        "no observadas se sobreestima. El procedimiento honesto es la "
-        "partición por bloques de tamaño mayor o igual al rango espacial, y "
-        "el reporte paralelo de ambas estimaciones para documentar el sesgo."
+        "viola cuando los datos tienen estructura espacial. Un modelo "
+        "evaluado sin controlar por dependencia espacial rinde bien sobre "
+        "conjuntos próximos a los de entrenamiento, mientras que su "
+        "capacidad de generalización a zonas no observadas queda "
+        "sobreestimada. El procedimiento adoptado es la partición por "
+        "bloques de tamaño mayor o igual al rango espacial, con reporte "
+        "paralelo de ambas estimaciones para documentar el sesgo."
     )

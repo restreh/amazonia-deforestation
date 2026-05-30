@@ -61,11 +61,12 @@ def home():
     año = cfg["temporal"]["target_year"]
 
     st.title("Detección temprana de deforestación en la Amazonía colombiana")
+    municipios_txt = " y ".join(aoi["municipalities"])
     lead(
-        f"Sentinel-2 y aprendizaje automático sobre {aoi['target_area_km2']:,} km² "
-        f"del Caquetá ({', '.join(aoi['municipalities'])}). Cuatro modelos candidatos "
-        f"comparados con bootstrap espacial por bloques (B=1.000) y prueba de McNemar "
-        f"pareada. Año objetivo: {año}.".replace(",", ".")
+        f"Sentinel-2 y aprendizaje automático sobre una ventana de 5.023 km² "
+        f"del Caquetá ({municipios_txt}). Cuatro modelos candidatos comparados "
+        f"con bootstrap espacial por bloques (B = 1.000) y prueba de McNemar "
+        f"pareada. Año objetivo: {año}."
     )
 
     # ── Hero metrics: el dolor, no la solucion ──────────────────────────────
@@ -105,11 +106,12 @@ def home():
         )
 
     takeaway(
-        "La región del arco amazónico colombiano perdió <strong>107.000 hectáreas en 2024</strong>, "
-        "35 % más que en 2023 según el IDEAM. El proyecto entrena un sistema de detección "
-        "temprana sobre un núcleo activo del Caquetá y demuestra que el ensamble por "
-        "promedio ponderado XGBoost + U-Net supera a los individuales en la mayoría "
-        "de métricas operativas, manteniendo intervalos de confianza espaciales honestos."
+        "Colombia perdió <strong>107.000 hectáreas de bosque en 2024</strong>, 35 % más "
+        "que en 2023 según el Boletín 42 del IDEAM. El proyecto entrena un "
+        "sistema de detección sobre el núcleo activo Cuemaní, en el Caquetá. "
+        "El ensamble por promedio ponderado XGBoost + U-Net obtiene el mejor F1 "
+        "píxel y polígono; los intervalos de confianza al 95 % bajo bootstrap "
+        "espacial se traslapan con XGBoost y U-Net individuales."
     )
 
     st.divider()
