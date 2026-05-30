@@ -6,11 +6,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import streamlit as st
-import geopandas as gpd
 import plotly.express as px
 
-from utils import (load_config, read_csv, warn_if_missing, PATHS,
-                   estadisticas_etiqueta, fmt_int, fmt_pct, fmt_hectareas)
+from utils import (load_config, read_csv, warn_if_missing,
+                   leer_geojson, estadisticas_etiqueta,
+                   fmt_int, fmt_pct, fmt_hectareas)
 from theme import aplicar_tema_plotly, aplicar_estilos_streamlit, takeaway, lead
 
 
@@ -64,7 +64,7 @@ if warn_if_missing("municipios"):
 
     @st.cache_data(show_spinner=False)
     def cargar_municipios():
-        return gpd.read_file(PATHS["municipios"]).to_crs(epsg=4326)
+        return leer_geojson("municipios").to_crs(epsg=4326)
 
     gdf = cargar_municipios()
     cy = gdf.geometry.centroid.y.mean()

@@ -13,9 +13,9 @@ import rasterio
 import folium
 from streamlit_folium import st_folium
 
-from utils import (PATHS, read_json, warn_if_missing, raster_a_overlay,
-                   NOMBRES_MODELO, MODELOS_CANDIDATOS, MODELO_CONTROL,
-                   fmt_int, fmt_hectareas, PIXEL_HA)
+from utils import (url, existe, read_json, warn_if_missing, raster_a_overlay,
+                   abrir_raster, NOMBRES_MODELO, MODELOS_CANDIDATOS,
+                   MODELO_CONTROL, fmt_int, fmt_hectareas, PIXEL_HA)
 from theme import (aplicar_tema_plotly, aplicar_estilos_streamlit, takeaway,
                    lead, CMAP_PROBA, CMAP_ERROR)
 
@@ -33,11 +33,8 @@ lead(
 
 
 # ── Seleccion de modelo y umbral ────────────────────────────────────────────
-disponibles = []
-for m in MODELOS_CANDIDATOS + [MODELO_CONTROL]:
-    p = PATHS["proba_" + m]
-    if p.exists():
-        disponibles.append(m)
+disponibles = [m for m in MODELOS_CANDIDATOS + [MODELO_CONTROL]
+               if existe("proba_" + m)]
 
 if not disponibles:
     st.warning("No hay rasters de probabilidad. Corre `predict.py` y/o "
@@ -74,7 +71,7 @@ st.caption(f"Umbral calibrado para {NOMBRES_MODELO[modelo_id]}: "
 st.subheader(f"Probabilidad — {NOMBRES_MODELO[modelo_id]}")
 
 overlay_proba, centro = raster_a_overlay(
-    str(PATHS["proba_" + modelo_id]),
+    url("proba_" + modelo_id),
     colormap=CMAP_PROBA, vmin=0.0, vmax=1.0,
     layer_name=f"Probabilidad {NOMBRES_MODELO[modelo_id]}",
 )
@@ -85,7 +82,7 @@ overlay_proba.add_to(m)
 # Hansen como capa de referencia conmutable
 if warn_if_missing("etiqueta"):
     overlay_hansen, _ = raster_a_overlay(
-        str(PATHS["etiqueta"]), colormap=["#0e1117", "#d62828"],
+        url("etiqueta"), colormap=["#0e1117", "#d62828"],
         vmin=0, vmax=1, opacidad=0.70, layer_name="Hansen GFC 2024",
     )
     overlay_hansen.add_to(m)
@@ -102,16 +99,16 @@ conteos = {}
 if mostrar_errores:
 
     @st.cache_data(show_spinner=False)
-    def calcular_errores(ruta_proba: str, umbral: float):
-        with rasterio.open(ruta_proba) as src:
+    def calcular_errores(modelo_id: str, umbral: float):
+        with abrir_raster("proba_" + modelo_id) as src:
             proba = src.read(1).astype("float32")
             perfil = src.profile.copy()
             nd = src.nodata
         if nd is not None:
             proba = np.where(proba == nd, np.nan, proba)
-        with rasterio.open(PATHS["etiqueta"]) as src:
+        with abrir_raster("etiqueta") as src:
             etiqueta = src.read(1)
-        with rasterio.open(PATHS["split"]) as src:
+        with abrir_raster("split") as src:
             split = src.read(1)
         pred = np.where(np.isnan(proba), 0, (proba >= umbral).astype("uint8"))
         test = split == 3
@@ -129,8 +126,7 @@ if mostrar_errores:
             dst.write(resultado, 1)
         return tmp.name, tp, fp, fn, tn
 
-    ruta_err, tp, fp, fn, tn = calcular_errores(
-        str(PATHS["proba_" + modelo_id]), umbral)
+    ruta_err, tp, fp, fn, tn = calcular_errores(modelo_id, umbral)
     conteos = {"TP": tp, "FP": fp, "FN": fn, "TN": tn}
     overlay_err, _ = raster_a_overlay(
         ruta_err, colormap=CMAP_ERROR, vmin=0, vmax=3, opacidad=0.85,
@@ -153,8 +149,8 @@ st.divider()
 st.subheader("Indicadores al umbral actual")
 
 @st.cache_data(show_spinner=False)
-def hectareas_predichas(ruta: str, umbral: float) -> float:
-    with rasterio.open(ruta) as src:
+def hectareas_predichas(modelo_id: str, umbral: float) -> float:
+    with abrir_raster("proba_" + modelo_id) as src:
         p = src.read(1).astype("float32")
         nd = src.nodata
     if nd is not None:
@@ -162,7 +158,7 @@ def hectareas_predichas(ruta: str, umbral: float) -> float:
     return float(np.nansum(p >= umbral)) * PIXEL_HA
 
 
-ha = hectareas_predichas(str(PATHS["proba_" + modelo_id]), umbral)
+ha = hectareas_predichas(modelo_id, umbral)
 
 if conteos:
     tp, fp, fn = conteos["TP"], conteos["FP"], conteos["FN"]

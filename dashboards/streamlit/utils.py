@@ -1,82 +1,135 @@
-"""Utilidades compartidas del tablero: rutas, cargadores tolerantes a archivos faltantes,
-helpers de raster y formato. La carpinteria que cada pagina reutiliza.
+"""Utilidades compartidas del tablero: rutas, cargadores tolerantes a archivos
+faltantes, helpers de raster y formato.
+
+El tablero puede leer de dos fuentes, configurable via la variable de entorno
+`AMAZONIA_DATA_SOURCE`:
+
+  - `local` (por defecto): lee de `data/...` en el repo. Usado en desarrollo
+    y cuando se distribuye el repo con artefactos.
+  - `s3`: lee de `s3://amazonia-deforestation-data-363918845645/...`
+    anonimamente. Usado por Streamlit Cloud y cualquier despliegue donde no
+    se quieran versionar los rasters en git. Los prefijos `derived/`,
+    `models/` y `metrics/` del bucket son public-read.
 """
 
 from __future__ import annotations
 
 import io
 import json
+import os
 import base64
 from pathlib import Path
+from typing import Union
 
 import numpy as np
 import streamlit as st
 
 
 ROOT = Path(__file__).resolve().parents[2]
-DATA = ROOT / "data"
-PRED = DATA / "processed" / "predictions"
-INTERIM = DATA / "interim"
-EXTERNAL = DATA / "external"
+S3_BUCKET = "amazonia-deforestation-data-363918845645"
+S3_REGION = "us-west-2"
+
+# Decide la fuente una sola vez y propagala como env vars para que GDAL/
+# rasterio puedan leer s3 anonimamente sin firmar.
+DATA_SOURCE = os.environ.get("AMAZONIA_DATA_SOURCE", "local").lower()
+if DATA_SOURCE == "s3":
+    # GDAL respeta estas variables para todas las operaciones VSI/s3.
+    os.environ.setdefault("AWS_NO_SIGN_REQUEST", "YES")
+    os.environ.setdefault("AWS_REGION", S3_REGION)
+    os.environ.setdefault("AWS_DEFAULT_REGION", S3_REGION)
+    os.environ.setdefault("GDAL_DISABLE_READDIR_ON_OPEN", "EMPTY_DIR")
+    os.environ.setdefault("CPL_VSIL_CURL_USE_HEAD", "NO")
 
 
 # ---------------------------------------------------------------------------
-# Catalogo unico de rutas. Una sola fuente de verdad para que las paginas no
-# tengan que armar paths a mano.
+# Catalogo unico de rutas. Una sola fuente de verdad. Cada entrada tiene la
+# misma forma de URL relativa al bucket; la funcion `url(key)` la materializa
+# como Path local o como s3:// segun la fuente.
 # ---------------------------------------------------------------------------
-PATHS = {
+_S3_PATHS = {
     # Configuracion y dominio
-    "config":            ROOT / "config" / "config.yaml",
-    "municipios":        EXTERNAL / "aoi_municipalities.geojson",
+    "config":            (ROOT / "config" / "config.yaml", None),   # solo local
+    "municipios":        (ROOT / "data" / "external" / "aoi_municipalities.geojson",
+                          "derived/external/aoi_municipalities.geojson"),
 
-    # Etiqueta y particion
-    "etiqueta":          INTERIM / "label_2024_20m.tif",
-    "split":             INTERIM / "split_blocks.tif",
-    "diagnosticos":      INTERIM / "spatial_diagnostics.txt",
-    "disponibilidad":    INTERIM / "s2_availability_summary.csv",
+    # Etiqueta y particion (subidas bajo derived/interim/)
+    "etiqueta":          (ROOT / "data" / "interim" / "label_2024_20m.tif",
+                          "derived/interim/label_2024_20m.tif"),
+    "split":             (ROOT / "data" / "interim" / "split_blocks.tif",
+                          "derived/interim/split_blocks.tif"),
+
+    # Reportes y CSVs que viven en metrics/
+    "diagnosticos":      (ROOT / "data" / "interim" / "spatial_diagnostics.txt",
+                          "metrics/spatial_diagnostics.txt"),
+    "disponibilidad":    (ROOT / "data" / "interim" / "s2_availability_summary.csv",
+                          "metrics/s2_availability_summary.csv"),
+    "cv_summary":        (ROOT / "data" / "interim" / "baseline_cv_summary.json",
+                          "metrics/baseline_cv_summary.json"),
+    "eval_xgboost":      (ROOT / "data" / "interim" / "eval_xgboost.json",
+                          "metrics/eval_xgboost.json"),
+    "eval_random_forest": (ROOT / "data" / "interim" / "eval_random_forest.json",
+                           "metrics/eval_random_forest.json"),
+    "eval_unet":         (ROOT / "data" / "interim" / "eval_unet.json",
+                          "metrics/eval_unet.json"),
+    "eval_ensemble":     (ROOT / "data" / "interim" / "eval_ensemble.json",
+                          "metrics/eval_ensemble.json"),
+    "eval_unet_imagenet": (ROOT / "data" / "interim" / "eval_unet_imagenet.json",
+                           "metrics/eval_unet_imagenet.json"),
+    "mcnemar":           (ROOT / "data" / "interim" / "mcnemar.json",
+                          "metrics/mcnemar.json"),
+    "bootstrap_spatial": (ROOT / "data" / "interim" / "bootstrap_spatial.json",
+                          "metrics/bootstrap_spatial.json"),
+    "concordance_lin":   (ROOT / "data" / "interim" / "concordance_lin.json",
+                          "metrics/concordance_lin.json"),
+    "compare_cv":        (ROOT / "data" / "interim" / "compare_cv.json",
+                          "metrics/compare_cv.json"),
+    "cv_xgboost":        (ROOT / "data" / "interim" / "cv_xgboost.csv",
+                          "metrics/cv_xgboost.csv"),
+    "cv_rf":             (ROOT / "data" / "interim" / "cv_random_forest.csv",
+                          "metrics/cv_random_forest.csv"),
+    "imp_xgboost":       (ROOT / "data" / "interim" / "importance_xgboost.csv",
+                          "metrics/importance_xgboost.csv"),
+    "imp_rf":            (ROOT / "data" / "interim" / "importance_random_forest.csv",
+                          "metrics/importance_random_forest.csv"),
 
     # Probabilidades densas por modelo
-    "proba_xgboost":         PRED / "proba_xgboost.tif",
-    "proba_random_forest":   PRED / "proba_random_forest.tif",
-    "proba_unet":            PRED / "proba_unet.tif",
-    "proba_ensemble":        PRED / "proba_ensemble.tif",
-    "proba_unet_imagenet":   PRED / "proba_unet_imagenet.tif",
+    "proba_xgboost":          (ROOT / "data" / "processed" / "predictions" / "proba_xgboost.tif",
+                               "derived/predictions/model=xgboost/proba.tif"),
+    "proba_random_forest":    (ROOT / "data" / "processed" / "predictions" / "proba_random_forest.tif",
+                               "derived/predictions/model=random_forest/proba.tif"),
+    "proba_unet":             (ROOT / "data" / "processed" / "predictions" / "proba_unet.tif",
+                               "derived/predictions/model=unet/proba.tif"),
+    "proba_ensemble":         (ROOT / "data" / "processed" / "predictions" / "proba_ensemble.tif",
+                               "derived/predictions/model=ensemble/proba.tif"),
+    "proba_unet_imagenet":    (ROOT / "data" / "processed" / "predictions" / "proba_unet_imagenet.tif",
+                               "derived/predictions/model=unet_imagenet/proba.tif"),
 
-    # Reportes de evaluacion por modelo
-    "eval_xgboost":         INTERIM / "eval_xgboost.json",
-    "eval_random_forest":   INTERIM / "eval_random_forest.json",
-    "eval_unet":            INTERIM / "eval_unet.json",
-    "eval_ensemble":        INTERIM / "eval_ensemble.json",
-    "eval_unet_imagenet":   INTERIM / "eval_unet_imagenet.json",
-
-    # Comparacion estadistica
-    "mcnemar":           INTERIM / "mcnemar.json",
-    "bootstrap_spatial": INTERIM / "bootstrap_spatial.json",
-    "concordance_lin":   INTERIM / "concordance_lin.json",
-    "compare_cv":        INTERIM / "compare_cv.json",
-
-    # Importancia de atributos y CV resumen
-    "cv_summary":        INTERIM / "baseline_cv_summary.json",
-    "cv_xgboost":        INTERIM / "cv_xgboost.csv",
-    "cv_rf":             INTERIM / "cv_random_forest.csv",
-    "imp_xgboost":       INTERIM / "importance_xgboost.csv",
-    "imp_rf":            INTERIM / "importance_random_forest.csv",
-
-    # Big Data
-    "athena_metrics":            INTERIM / "athena_q_metrics_by_model.csv",
-    "athena_top_blocks":         INTERIM / "athena_q_top_blocks_ensemble.csv",
-    "athena_hectares_by_split":  INTERIM / "athena_q_hectares_by_split.csv",
-    "athena_partition_pruning":  INTERIM / "athena_q_features_partition_pruning.csv",
-    "metrics_by_block":          DATA / "processed" / "metrics_by_block" / "part.parquet",
-
-    # Composiciones (para comparador pre/post)
-    "comp_2024Q1_median":  DATA / "processed" / "composites" / "composite_2024Q1_median.tif",
-    "comp_2024Q4_median":  DATA / "processed" / "composites" / "composite_2024Q4_median.tif",
+    # Big Data / Athena (estaticos en el repo, no se duplican en S3 metrics)
+    "athena_metrics":            (ROOT / "data" / "interim" / "athena_q_metrics_by_model.csv",
+                                   "metrics/athena_q_metrics_by_model.csv"),
+    "athena_top_blocks":         (ROOT / "data" / "interim" / "athena_q_top_blocks_ensemble.csv",
+                                   "metrics/athena_q_top_blocks_ensemble.csv"),
+    "athena_hectares_by_split":  (ROOT / "data" / "interim" / "athena_q_hectares_by_split.csv",
+                                   "metrics/athena_q_hectares_by_split.csv"),
+    "athena_partition_pruning":  (ROOT / "data" / "interim" / "athena_q_features_partition_pruning.csv",
+                                   "metrics/athena_q_features_partition_pruning.csv"),
 }
 
 
-# Nombres canonicos y orden de presentacion de modelos. Una sola fuente para
-# que toda la UI cuente la misma historia.
+def url(key: str) -> Union[Path, str]:
+    """Devuelve la URL del recurso segun la fuente. Path local o `s3://...`."""
+    local, s3_key = _S3_PATHS[key]
+    if DATA_SOURCE == "s3" and s3_key is not None:
+        return f"s3://{S3_BUCKET}/{s3_key}"
+    return local
+
+
+# Mantengo `PATHS` para compatibilidad: en modo local es identico al diccionario
+# original; en modo s3 contiene `s3://...` strings.
+PATHS = {k: url(k) for k in _S3_PATHS}
+
+
+# Nombres canonicos y orden de presentacion de modelos.
 MODELOS_CANDIDATOS = ["xgboost", "random_forest", "unet", "ensemble"]
 MODELO_CONTROL = "unet_imagenet"
 NOMBRES_MODELO = {
@@ -91,46 +144,125 @@ NOMBRES_MODELO = {
 # ---------------------------------------------------------------------------
 # Cargadores tolerantes
 # ---------------------------------------------------------------------------
-def warn_if_missing(key: str) -> bool:
-    """Devuelve True si el archivo existe; si no, muestra un aviso amable."""
-    p = PATHS[key]
-    if not p.exists():
-        st.info(f"Aún no está disponible `{p.relative_to(ROOT)}`; "
-                "este panel se completa cuando exista.")
+def _exists(u: Union[Path, str]) -> bool:
+    """True si el recurso existe (local o s3 anonimo)."""
+    if isinstance(u, Path):
+        return u.exists()
+    # s3://; HEAD anonimo
+    try:
+        import fsspec
+        fs = fsspec.filesystem("s3", anon=True)
+        return fs.exists(u.replace("s3://", ""))
+    except Exception:
         return False
-    return True
+
+
+def _open_text(u: Union[Path, str]):
+    """Abre el recurso como texto (read mode)."""
+    if isinstance(u, Path):
+        return open(u, "r", encoding="utf-8")
+    import fsspec
+    return fsspec.open(u, mode="r", encoding="utf-8", anon=True).open()
+
+
+def warn_if_missing(key: str) -> bool:
+    """Devuelve True si existe; si no, muestra un aviso amable."""
+    u = url(key)
+    if _exists(u):
+        return True
+    label = (u if isinstance(u, str)
+             else u.relative_to(ROOT))
+    st.info(f"Aún no está disponible `{label}`; este panel se completa cuando exista.")
+    return False
 
 
 @st.cache_data(show_spinner=False)
 def load_config() -> dict:
     import yaml
-    return yaml.safe_load(PATHS["config"].read_text(encoding="utf-8"))
+    return yaml.safe_load(_open_text(PATHS["config"]).read())
 
 
 @st.cache_data(show_spinner=False)
 def read_json(key: str):
-    p = PATHS[key]
-    return json.loads(p.read_text(encoding="utf-8")) if p.exists() else None
+    u = url(key)
+    if not _exists(u):
+        return None
+    with _open_text(u) as f:
+        return json.load(f)
 
 
 @st.cache_data(show_spinner=False)
 def read_csv(key: str):
     import pandas as pd
-    p = PATHS[key]
-    return pd.read_csv(p) if p.exists() else None
+    u = url(key)
+    if not _exists(u):
+        return None
+    if isinstance(u, str) and u.startswith("s3://"):
+        return pd.read_csv(u, storage_options={"anon": True})
+    return pd.read_csv(u)
 
 
 @st.cache_data(show_spinner=False)
 def read_parquet(key: str):
     import pandas as pd
-    p = PATHS[key]
-    return pd.read_parquet(p) if p.exists() else None
+    u = url(key)
+    if not _exists(u):
+        return None
+    if isinstance(u, str) and u.startswith("s3://"):
+        return pd.read_parquet(u, storage_options={"anon": True})
+    return pd.read_parquet(u)
 
 
 @st.cache_data(show_spinner=False)
 def read_text(key: str) -> str:
-    p = PATHS[key]
-    return p.read_text(encoding="utf-8") if p.exists() else ""
+    u = url(key)
+    if not _exists(u):
+        return ""
+    with _open_text(u) as f:
+        return f.read()
+
+
+def _rasterio_open(u: Union[Path, str]):
+    """rasterio.open que funciona con local o s3 anonimo via VSI/s3."""
+    import rasterio
+    if isinstance(u, Path):
+        return rasterio.open(str(u))
+    if u.startswith("s3://"):
+        # rasterio entiende /vsis3/ con AWS_NO_SIGN_REQUEST=YES
+        vsi = u.replace("s3://", "/vsis3/")
+        return rasterio.open(vsi)
+    return rasterio.open(u)
+
+
+# Aliases publicos para usar desde las paginas.
+def existe(key: str) -> bool:
+    """True si el recurso de la key existe (local o s3)."""
+    return _exists(url(key))
+
+
+def abrir_raster(key_or_url):
+    """rasterio.open transparente sobre key del catalogo o URL/Path directo."""
+    if isinstance(key_or_url, str) and key_or_url in _S3_PATHS:
+        return _rasterio_open(url(key_or_url))
+    return _rasterio_open(key_or_url)
+
+
+def leer_geojson(key: str):
+    """gpd.read_file que funciona con local o s3 anonimo."""
+    import geopandas as gpd
+    u = url(key)
+    if isinstance(u, Path):
+        return gpd.read_file(u)
+    # s3 anonimo: descargamos a tempfile y leemos. Es chico.
+    import fsspec
+    import tempfile
+    suffix = "." + u.split(".")[-1] if "." in u else ""
+    with fsspec.open(u, mode="rb", anon=True) as src:
+        data = src.read()
+    tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+    tmp.write(data)
+    tmp.close()
+    return gpd.read_file(tmp.name)
 
 
 # ---------------------------------------------------------------------------
@@ -141,47 +273,41 @@ PIXEL_HA = 0.04   # 20 m x 20 m = 400 m^2 = 0.04 ha
 
 @st.cache_data(show_spinner=False)
 def estadisticas_etiqueta() -> dict:
-    """Conteo total, positivos y prevalencia de la etiqueta de Hansen.
+    """Conteo total, positivos y prevalencia honesta de la etiqueta de Hansen.
 
-    label_2024_20m.tif tiene `nodata=0` por convencion de GeoTIFF, pero en
-    realidad 0 significa "sin deforestacion". Para la prevalencia honesta
-    contamos sobre todos los pixeles del AOI (intersectados con split>0).
+    `label_2024_20m.tif` tiene `nodata=0` (convencion GeoTIFF), pero 0 en
+    realidad significa "sin deforestacion". Acotamos al AOI usando
+    `split > 0` para no descartar pixeles validos.
     """
-    import rasterio
-    with rasterio.open(PATHS["etiqueta"]) as src:
+    with _rasterio_open(url("etiqueta")) as src:
         et = src.read(1)
-    with rasterio.open(PATHS["split"]) as src:
+    with _rasterio_open(url("split")) as src:
         sp = src.read(1)
     en_aoi = sp > 0
     total = int(en_aoi.sum())
     positivos = int(((et == 1) & en_aoi).sum())
     prevalencia = positivos / total if total > 0 else 0.0
-    hectareas = positivos * PIXEL_HA
     return {
         "total_pixeles": total,
         "positivos": positivos,
         "prevalencia": prevalencia,
-        "hectareas_deforestadas": hectareas,
+        "hectareas_deforestadas": positivos * PIXEL_HA,
     }
 
 
-@st.cache_data(show_spinner=False)
-def raster_a_overlay(ruta: str, colormap: str | list[str], vmin: float, vmax: float,
+@st.cache_data(show_spinner="Renderizando raster...")
+def raster_a_overlay(ruta: str, colormap, vmin: float, vmax: float,
                      max_px: int = 700, opacidad: float = 0.75,
                      layer_name: str = "Raster"):
-    """Lee un raster, le aplica un colormap y devuelve un folium.ImageOverlay listo
-    para apilar en un mapa, mas el centro geografico para encuadrar.
-
-    Funciona sin localtileserver: genera un PNG base64 en memoria. Reproyecta
-    los limites desde el CRS del raster a EPSG:4326 para que folium lo ubique.
-    """
+    """Lee un raster (local o s3) y devuelve un folium.ImageOverlay con un PNG
+    base64 generado a partir del colormap dado. No requiere localtileserver."""
     import rasterio
     import rasterio.warp
     import folium
     import matplotlib.pyplot as plt
     from matplotlib.colors import ListedColormap
 
-    with rasterio.open(ruta) as src:
+    with _rasterio_open(ruta) as src:
         factor = max(1, max(src.width, src.height) // max_px)
         data = src.read(
             1,
@@ -200,7 +326,7 @@ def raster_a_overlay(ruta: str, colormap: str | list[str], vmin: float, vmax: fl
         cmap = plt.get_cmap(colormap)
     norm = plt.Normalize(vmin=vmin, vmax=vmax)
     rgba = cmap(norm(np.nan_to_num(data, nan=vmin)))
-    rgba[np.isnan(data), 3] = 0   # transparencia donde haya NaN
+    rgba[np.isnan(data), 3] = 0
 
     buf = io.BytesIO()
     plt.imsave(buf, (rgba * 255).astype(np.uint8), format="png")
@@ -220,21 +346,21 @@ def raster_a_overlay(ruta: str, colormap: str | list[str], vmin: float, vmax: fl
 # ---------------------------------------------------------------------------
 # Helpers de formato
 # ---------------------------------------------------------------------------
-def fmt_int(n: float | int) -> str:
+def fmt_int(n) -> str:
     return f"{int(n):,}".replace(",", ".")
 
 
-def fmt_decimal(x: float, n: int = 3) -> str:
+def fmt_decimal(x, n: int = 3) -> str:
     if x is None or (isinstance(x, float) and np.isnan(x)):
         return "—"
     return f"{x:.{n}f}"
 
 
-def fmt_pct(x: float, n: int = 2) -> str:
+def fmt_pct(x, n: int = 2) -> str:
     if x is None or (isinstance(x, float) and np.isnan(x)):
         return "—"
     return f"{x*100:.{n}f} %"
 
 
-def fmt_hectareas(x: float) -> str:
+def fmt_hectareas(x) -> str:
     return f"{x:,.0f} ha".replace(",", ".")

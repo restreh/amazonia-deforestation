@@ -9,13 +9,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import numpy as np
 import streamlit as st
 import pandas as pd
-import geopandas as gpd
-import rasterio
 import rasterio.mask
 import plotly.express as px
 
-from utils import (PATHS, read_json, warn_if_missing, NOMBRES_MODELO,
-                   MODELOS_CANDIDATOS, MODELO_CONTROL, fmt_hectareas, PIXEL_HA)
+from utils import (existe, read_json, warn_if_missing, abrir_raster,
+                   leer_geojson, NOMBRES_MODELO, MODELOS_CANDIDATOS,
+                   MODELO_CONTROL, fmt_hectareas, PIXEL_HA)
 from theme import (aplicar_tema_plotly, aplicar_estilos_streamlit, takeaway,
                    lead, COLORES, COLORES_MODELO)
 
@@ -33,7 +32,7 @@ lead(
 
 # ── Selectores ──────────────────────────────────────────────────────────────
 disponibles = [m for m in MODELOS_CANDIDATOS + [MODELO_CONTROL]
-               if PATHS["proba_" + m].exists()]
+               if existe("proba_" + m)]
 if not disponibles:
     st.warning("No hay rasters de probabilidad disponibles.")
     st.stop()
@@ -64,18 +63,17 @@ for key in ("municipios", "etiqueta"):
 
 @st.cache_data(show_spinner="Calculando hectáreas por municipio…")
 def hectareas_por_municipio(modelo_id: str, umbral: float):
-    proba_path = PATHS["proba_" + modelo_id]
-    with rasterio.open(PATHS["etiqueta"]) as src_et:
+    with abrir_raster("etiqueta") as src_et:
         crs_raster = src_et.crs
 
-    gdf = gpd.read_file(PATHS["municipios"]).to_crs(crs_raster)
+    gdf = leer_geojson("municipios").to_crs(crs_raster)
     name_field = next((c for c in ("MpNombre", "mpio_cnmbr", "nombre",
                                    "NOMBRE_MPI") if c in gdf.columns),
                        gdf.columns[0])
 
     filas = []
-    with rasterio.open(PATHS["etiqueta"]) as src_et, \
-         rasterio.open(str(proba_path)) as src_pr:
+    with abrir_raster("etiqueta") as src_et, \
+         abrir_raster("proba_" + modelo_id) as src_pr:
         for _, row in gdf.iterrows():
             geom = [row.geometry.__geo_interface__]
             # etiqueta Hansen
@@ -129,7 +127,7 @@ st.divider()
 # ── Choropleth con tasa Hansen ──────────────────────────────────────────────
 st.subheader("Choropleth — tasa de pérdida en el municipio (Hansen 2024)")
 
-gdf_plot = gpd.read_file(PATHS["municipios"]).to_crs(epsg=4326)
+gdf_plot = leer_geojson("municipios").to_crs(epsg=4326)
 name_field = next((c for c in ("MpNombre", "mpio_cnmbr", "nombre", "NOMBRE_MPI")
                    if c in gdf_plot.columns), gdf_plot.columns[0])
 gdf_plot["Municipio"] = gdf_plot[name_field].astype(str).str.title()

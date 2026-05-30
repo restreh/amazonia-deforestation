@@ -13,7 +13,7 @@ from streamlit_folium import st_folium
 import plotly.express as px
 import pandas as pd
 
-from utils import (read_text, read_json, warn_if_missing, PATHS,
+from utils import (read_text, read_json, warn_if_missing, url,
                    raster_a_overlay)
 from theme import (aplicar_tema_plotly, aplicar_estilos_streamlit,
                    takeaway, lead, CMAP_SPLIT, COLORES, COLORES_MODELO)
@@ -84,7 +84,7 @@ with col_leyenda:
 with col_mapa:
     if warn_if_missing("split"):
         overlay, centro = raster_a_overlay(
-            str(PATHS["split"]),
+            url("split"),
             colormap=CMAP_SPLIT,
             vmin=0, vmax=3, opacidad=0.75,
             layer_name="Partición",

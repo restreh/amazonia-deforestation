@@ -1,0 +1,33 @@
+# Dependencias minimas para correr SOLO el tablero Streamlit.
+# Streamlit Community Cloud apunta a este archivo via su setting de
+# "Advanced settings -> Python dependencies file".
+# El requirements.txt de la raiz queda intacto para el pipeline completo
+# (entrenamiento, predicciones, AWS, Big Data).
+
+# --- Nucleo numerico ---
+numpy>=1.26,<2.1
+pandas>=2.1
+pyyaml>=6.0
+
+# --- Geoespacial: lectura de rasters y vectores ---
+rasterio>=1.3.9
+geopandas>=0.14
+shapely>=2.0
+pyproj>=3.6
+fiona>=1.9
+
+# --- Streamlit y visualizacion ---
+streamlit>=1.31
+streamlit-folium>=0.20
+leafmap>=0.30
+folium>=0.15
+plotly>=5.18
+matplotlib>=3.8
+
+# --- IO de datos (local y s3 anonimo) ---
+pyarrow>=15.0
+fsspec>=2024.2
+s3fs>=2024.2
+
+# --- AWS para botones opcionales de Athena en vivo ---
+boto3>=1.34

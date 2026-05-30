@@ -1,0 +1,16 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "PublicReadDerivadosModelosMetricas",
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": "s3:GetObject",
+      "Resource": [
+        "arn:aws:s3:::amazonia-deforestation-data-363918845645/derived/*",
+        "arn:aws:s3:::amazonia-deforestation-data-363918845645/models/*",
+        "arn:aws:s3:::amazonia-deforestation-data-363918845645/metrics/*"
+      ]
+    }
+  ]
+}
